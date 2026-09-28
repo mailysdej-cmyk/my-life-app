@@ -37,10 +37,10 @@ const TODAY=new Date();
 const CYCLE_START=new Date(2026,4,16);
 const CYCLE_LEN=32,PERIOD_LEN=5;
 const PHASES=[
-  {key:"menstruelle",label:"Menstruelle",days:"Jour 1 à 5",color:"#6b4530",light:"rgba(107,69,48,0.18)",icon:"💧",symptoms:["Crampes","Fatigue","Besoin de repos","Émotions intenses"]},
-  {key:"folliculaire",label:"Folliculaire",days:"Jour 6 à 14",color:"#cb8f62",light:"rgba(203,143,98,0.20)",icon:"🌸",symptoms:["Boost d'énergie","Confiance en soi","Bonne humeur","Haute libido"]},
-  {key:"ovulation",label:"Ovulation",days:"Jour 15 à 17",color:"#a97c4f",light:"rgba(169,124,79,0.20)",icon:"💜",symptoms:["Pic d'énergie","Sociabilité","Sensibilité","Légère douleur pelvienne"]},
-  {key:"luteale",label:"Lutéale",days:"Jour 18 à 32",color:"#8a6a4a",light:"rgba(138,106,74,0.18)",icon:"🌙",symptoms:["SPM possible","Besoin de calme","Ballonnements","Envies alimentaires"]},
+  {key:"menstruelle",label:"Menstruelle",days:"Jour 1 à 5",color:"#6b4530",light:"rgba(107,69,48,0.18)",symptoms:["Crampes","Fatigue","Besoin de repos","Émotions intenses"]},
+  {key:"folliculaire",label:"Folliculaire",days:"Jour 6 à 14",color:"#cb8f62",light:"rgba(203,143,98,0.20)",symptoms:["Boost d'énergie","Confiance en soi","Bonne humeur","Haute libido"]},
+  {key:"ovulation",label:"Ovulation",days:"Jour 15 à 17",color:"#a97c4f",light:"rgba(169,124,79,0.20)",symptoms:["Pic d'énergie","Sociabilité","Sensibilité","Légère douleur pelvienne"]},
+  {key:"luteale",label:"Lutéale",days:"Jour 18 à 32",color:"#8a6a4a",light:"rgba(138,106,74,0.18)",symptoms:["SPM possible","Besoin de calme","Ballonnements","Envies alimentaires"]},
 ];
 function parseD(s){return new Date(s+"T00:00:00");}
 function dayDiff(a,b){return Math.round((new Date(a.getFullYear(),a.getMonth(),a.getDate())-new Date(b.getFullYear(),b.getMonth(),b.getDate()))/86400000);}
@@ -119,16 +119,16 @@ const CYCLE_SPORT=[
   {key:"luteale",title:"Douceur & mobilité",tip:"Réduis l'intensité : pilates, mobilité, gainage léger, étirements."},
 ];
 function getSportForPhase(key){return CYCLE_SPORT.find(s=>s.key===key)||CYCLE_SPORT[0];}
-const PHASE_ICON_NAME={menstruelle:"droplet",folliculaire:"flower",ovulation:"sparkle",luteale:"moon"};
+const PHASE_ICON_NAME={menstruelle:"droplet",folliculaire:"flower",ovulation:"sparkles",luteale:"moon"};
 const DEF_MORNING_STEPS=["Réveil","Faire le lit – Verre d'eau – Lumière naturelle","Petit-déjeuner sain préparé","Sport 20 à 30 min","Douche – Routine visage – Habillage","Départ de la journée"];
 const DEF_EVENING_STEPS=["Retour – Moment avec Tom","Dîner sain","Vaisselle + rangement","Douche – Routine visage","Temps calme (lecture, détente)","Respiration / Méditation","Extinction – Sommeil 8 à 9h"];
 const DEF_KEY_HABITS=[
-  {id:1,label:"Hydratation",sub:"2L / jour",icon:"💧"},
-  {id:2,label:"Sommeil",sub:"8 à 9h",icon:"🌙"},
-  {id:3,label:"Méditation",sub:"5 min / jour",icon:"🧘"},
-  {id:4,label:"Lecture",sub:"10-15 min",icon:"📖"},
-  {id:5,label:"Gratitude",sub:"3 choses / jour",icon:"❤️"},
-  {id:6,label:"Pas quotidiens",sub:"8k-10k",icon:"👟"},
+  {id:1,label:"Hydratation",sub:"2L / jour",icon:"droplet"},
+  {id:2,label:"Sommeil",sub:"8 à 9h",icon:"moon"},
+  {id:3,label:"Méditation",sub:"5 min / jour",icon:"lotus"},
+  {id:4,label:"Lecture",sub:"10-15 min",icon:"book"},
+  {id:5,label:"Gratitude",sub:"3 choses / jour",icon:"heart"},
+  {id:6,label:"Pas quotidiens",sub:"8k-10k",icon:"shoe"},
 ];
 
 const COLORS=[
@@ -153,7 +153,7 @@ function save(key,val){try{localStorage.setItem(key,JSON.stringify(val));}catch{
 const DEF_EVENTS=[
   {id:1,date:dStr(TODAY),hour:8,min:0,title:"Crèche travail",color:"pink"},
   {id:2,date:dStr(TODAY),hour:15,min:0,title:"Cuisiner",color:"green"},
-  {id:3,date:dStr(TODAY),hour:18,min:0,title:"Business 💝",color:"purple"},
+  {id:3,date:dStr(TODAY),hour:18,min:0,title:"Business",color:"purple"},
 ];
 const DEF_TODOS=[
   {id:1,text:"Assurance habitation",done:false},
@@ -162,11 +162,11 @@ const DEF_TODOS=[
   {id:4,text:"Impôts",done:false},
 ];
 const DEF_HABITS=[
-  {id:1,name:"Business",emoji:"🧋",color:"pink",done:false,streak:14},
-  {id:2,name:"Sport",emoji:"💪",color:"lavender",done:false,streak:5},
-  {id:3,name:"Petit-déjeuner",emoji:"🥪",color:"gold",done:false,streak:3},
-  {id:4,name:"Méditation",emoji:"🧘‍♀️",color:"green",done:false,streak:7},
-  {id:5,name:"Boire de l'eau",emoji:"💧",color:"blue",done:false,streak:9},
+  {id:1,name:"Business",emoji:"cup",color:"pink",done:false,streak:14},
+  {id:2,name:"Sport",emoji:"dumbbell",color:"lavender",done:false,streak:5},
+  {id:3,name:"Petit-déjeuner",emoji:"bowl",color:"gold",done:false,streak:3},
+  {id:4,name:"Méditation",emoji:"lotus",color:"green",done:false,streak:7},
+  {id:5,name:"Boire de l'eau",emoji:"droplet",color:"blue",done:false,streak:9},
 ];
 
 const css=`
@@ -208,7 +208,7 @@ const css=`
 .tlabel{width:38px;font-size:10px;color:#ccc;padding-top:5px;flex-shrink:0;}
 .slot-c{flex:1;padding:3px 0 3px 5px;display:flex;flex-direction:column;gap:3px;}
 .epill{border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:5px;}
-.edel{opacity:0;font-size:11px;color:#ff9999;background:none;border:none;cursor:pointer;padding:0 2px;transition:opacity .15s;}
+.edel{display:inline-flex;align-items:center;gap:5px;opacity:0;font-size:11px;color:#ff9999;background:none;border:none;cursor:pointer;padding:0 2px;transition:opacity .15s;}
 .epill:hover .edel,.epill:active .edel{opacity:1;}
 .add-ev{margin-top:12px;width:100%;padding:11px;border:2px dashed ${BLUSH};background:transparent;border-radius:17px;cursor:pointer;font-family:'Jost',sans-serif;font-size:12px;color:${R};letter-spacing:.4px;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:6px;}
 .wgrid{display:grid;grid-template-columns:36px repeat(7,1fr);}
@@ -253,7 +253,7 @@ const css=`
 .tchk.on{background:linear-gradient(135deg,${MAUVE},${R});border-color:transparent;color:white;font-size:10px;}
 .ttxt{flex:1;font-size:13px;color:${DARK};font-weight:300;}
 .titem.done .ttxt{text-decoration:line-through;color:#ccc;}
-.tdel{opacity:0;cursor:pointer;color:#ddd;font-size:12px;background:none;border:none;padding:2px;}
+.tdel{display:inline-flex;align-items:center;gap:5px;opacity:0;cursor:pointer;color:#ddd;font-size:12px;background:none;border:none;padding:2px;}
 .titem:hover .tdel,.titem:active .tdel{opacity:1;color:#ff9999;}
 .inline-edit{width:100%;background:none;border:none;border-bottom:1.5px solid ${R};font-family:'Jost',sans-serif;font-size:13px;color:${DARK};padding:2px 0;outline:none;}
 .hdate-strip{display:flex;gap:4px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none;}
@@ -266,9 +266,9 @@ const css=`
 .hcard{background:white;border-radius:21px;padding:13px 13px 13px 17px;margin-bottom:8px;box-shadow:0 2px 8px rgba(107,69,48,0.20);position:relative;overflow:hidden;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:10px;animation:fi .25s ease;}
 .hcard.done-h{opacity:.7;}
 .hcard.done-h .hname{text-decoration:line-through;color:#bbb;}
-.hemoji{font-size:20px;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:2px 2px 6px rgba(107,69,48,0.3),-2px -2px 5px rgba(255,255,255,0.8),inset 0 1px 2px rgba(255,255,255,0.6);}
+.hemoji{color:${MAUVE};width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:2px 2px 6px rgba(107,69,48,0.3),-2px -2px 5px rgba(255,255,255,0.8),inset 0 1px 2px rgba(255,255,255,0.6);}
 .hname{font-size:13px;font-weight:500;color:${DARK};margin-bottom:1px;}
-.hstreak{font-size:10px;color:#aaa;}
+.hstreak{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:#aaa;}
 .hbigcheck{width:26px;height:26px;border-radius:50%;border:2px solid ${BLUSH};display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .22s;}
 .hbigcheck.on{background:linear-gradient(135deg,${MAUVE},${R});border-color:transparent;color:white;font-size:12px;}
 .add-h-btn{margin-top:4px;width:100%;padding:12px;border:2px dashed ${MAUVE};background:transparent;border-radius:999px;cursor:pointer;font-family:'Jost',sans-serif;font-size:12px;color:${MAUVE};letter-spacing:.3px;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:5px;}
@@ -279,14 +279,17 @@ const css=`
 .cycle-hero-days{font-family:'Quicksand',sans-serif;font-weight:600;font-size:48px;font-weight:300;line-height:1;color:white;margin-bottom:3px;}
 .cycle-hero-sub{font-size:11px;color:rgba(255,255,255,0.85);letter-spacing:.3px;}
 .cycle-phase-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.22);backdrop-filter:blur(6px);border-radius:24px;padding:5px 12px;font-size:11px;color:white;margin-top:10px;font-weight:500;}
-.cycle-edit-btn{display:block;margin-top:9px;background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.55);color:white;font-size:10px;padding:6px 12px;border-radius:22px;cursor:pointer;font-family:'Jost',sans-serif;letter-spacing:.2px;}
+.cycle-edit-btn{display:flex;align-items:center;gap:6px;margin-top:9px;background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.55);color:white;font-size:10px;padding:6px 12px;border-radius:22px;cursor:pointer;font-family:'Jost',sans-serif;letter-spacing:.2px;}
 .phase-row{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:16px;}
 .phase-card{border-radius:18px;padding:10px 6px;text-align:center;cursor:pointer;transition:all .18s;border:2px solid transparent;}
 .phase-card.active{border-color:white;box-shadow:0 3px 12px rgba(0,0,0,0.12);transform:translateY(-1px);}
-.phase-card-icon{font-size:16px;margin-bottom:4px;}
+.phase-card-icon{margin-bottom:4px;display:flex;justify-content:center;}
+.ipick{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:9px;}
+.ipick-item{aspect-ratio:1;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${CREAM};color:${MAUVE};cursor:pointer;transition:all .15s;}
+.ipick-item.sel{background:linear-gradient(135deg,${MAUVE},${R});color:white;box-shadow:0 2px 6px rgba(107,69,48,0.35);}
 .phase-card-name{font-size:8px;letter-spacing:.5px;text-transform:uppercase;font-weight:500;color:white;opacity:.9;}
 .symp-box{background:white;border-radius:22px;padding:14px;margin-bottom:16px;box-shadow:0 2px 8px rgba(107,69,48,0.22);}
-.symp-title{font-family:'Quicksand',sans-serif;font-weight:600;font-size:15px;color:${DARK};margin-bottom:3px;}
+.symp-title{display:flex;align-items:center;gap:6px;font-family:'Quicksand',sans-serif;font-weight:600;font-size:15px;color:${DARK};margin-bottom:3px;}
 .symp-sub{font-size:10px;color:#aaa;letter-spacing:.3px;margin-bottom:10px;}
 .symp-tags{display:flex;flex-wrap:wrap;gap:6px;}
 .symp-tag{padding:6px 13px;border-radius:999px;font-size:11px;font-weight:500;}
@@ -296,17 +299,17 @@ const css=`
 .cycle-cday{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:11px;cursor:pointer;transition:all .15s;font-weight:300;}
 .cycle-cday.tod{font-weight:700;box-shadow:0 0 0 2px white,0 0 0 3px currentColor;}
 .partner-box{background:white;border-radius:22px;padding:16px;box-shadow:0 2px 8px rgba(107,69,48,0.22);margin-bottom:14px;}
-.partner-title{font-family:'Quicksand',sans-serif;font-weight:600;font-size:16px;color:${DARK};margin-bottom:3px;}
+.partner-title{display:flex;align-items:center;gap:6px;font-family:'Quicksand',sans-serif;font-weight:600;font-size:16px;color:${DARK};margin-bottom:3px;}
 .partner-sub{font-size:10px;color:#aaa;margin-bottom:12px;line-height:1.5;}
 .partner-code-box{background:${CREAM};border-radius:16px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
 .partner-code{font-family:'Quicksand',sans-serif;font-weight:600;font-size:24px;letter-spacing:6px;color:${MAUVE};font-weight:600;}
-.copy-btn{padding:6px 12px;border-radius:15px;background:linear-gradient(135deg,${MAUVE},${R});color:white;border:none;cursor:pointer;font-family:'Jost',sans-serif;font-size:11px;}
+.copy-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:15px;background:linear-gradient(135deg,${MAUVE},${R});color:white;border:none;cursor:pointer;font-family:'Jost',sans-serif;font-size:11px;}
 .partner-hint{font-size:10px;color:#bbb;text-align:center;line-height:1.4;}
 .partner-divider{text-align:center;font-size:10px;color:#ccc;letter-spacing:1px;text-transform:uppercase;margin:12px 0;}
 .pinput-row{display:flex;gap:7px;}
 .pinput{flex:1;padding:10px 12px;border:1px solid ${BLUSH};border-radius:16px;font-family:'Jost',sans-serif;font-size:13px;color:${DARK};background:${CREAM};outline:none;letter-spacing:3px;text-transform:uppercase;}
 .pinput:focus{border-color:${R};}
-.pconnect-btn{padding:10px 14px;border:none;background:linear-gradient(135deg,${MAUVE},${R});color:white;border-radius:16px;cursor:pointer;font-family:'Jost',sans-serif;font-size:12px;font-weight:500;}
+.pconnect-btn{display:inline-flex;align-items:center;gap:5px;padding:10px 14px;border:none;background:linear-gradient(135deg,${MAUVE},${R});color:white;border-radius:16px;cursor:pointer;font-family:'Jost',sans-serif;font-size:12px;font-weight:500;}
 .pview-hero{border-radius:22px;padding:18px;text-align:center;margin-bottom:12px;}
 .pview-label{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.8);margin-bottom:5px;}
 .pview-days{font-family:'Quicksand',sans-serif;font-weight:600;font-size:40px;color:white;font-weight:300;line-height:1;}
@@ -325,7 +328,7 @@ const css=`
 .rt-hero-label{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;opacity:.85;margin-bottom:4px;color:white;}
 .rt-hero-title{font-family:'Quicksand',sans-serif;font-weight:600;font-size:22px;color:white;margin-bottom:8px;}
 .rt-hero-row{display:flex;gap:14px;font-size:11px;color:rgba(255,255,255,0.92);flex-wrap:wrap;}
-.rt-hero-chip{background:rgba(255,255,255,0.24);border-radius:999px;padding:5px 12px;}
+.rt-hero-chip{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.24);border-radius:999px;padding:5px 12px;}
 .rules-box{background:white;border-radius:22px;padding:14px 16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(107,69,48,0.22);}
 .rules-title{font-family:'Quicksand',sans-serif;font-weight:600;font-size:15px;color:${DARK};margin-bottom:9px;}
 .rule-row{display:flex;align-items:flex-start;gap:7px;font-size:12px;color:${DARK};padding:4px 0;font-weight:300;}
@@ -347,13 +350,13 @@ const css=`
 .rt-week-sport{font-size:11px;color:${MAUVE};display:flex;align-items:center;gap:4px;white-space:nowrap;}
 .rt-habits-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px;}
 .rt-habit-card{background:white;border-radius:18px;padding:10px 6px;text-align:center;box-shadow:0 2px 6px rgba(107,69,48,0.18);}
-.rt-habit-icon{font-size:16px;margin:0 auto 5px;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,0.9),${BLUSH} 65%,${GOLD} 100%);display:flex;align-items:center;justify-content:center;box-shadow:inset -2px -2px 4px rgba(74,40,23,0.15),inset 2px 2px 4px rgba(255,255,255,0.5);}
+.rt-habit-icon{color:${MAUVE};margin:0 auto 5px;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,0.9),${BLUSH} 65%,${GOLD} 100%);display:flex;align-items:center;justify-content:center;box-shadow:inset -2px -2px 4px rgba(74,40,23,0.15),inset 2px 2px 4px rgba(255,255,255,0.5);}
 .rt-habit-label{font-size:9.5px;color:${DARK};font-weight:500;}
 .rt-habit-sub{font-size:8.5px;color:#bbb;}
 .rt-step-num{width:20px;height:20px;border-radius:50%;background:${CREAM};color:${MAUVE};font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .rt-step.on .rt-step-num{background:${BLUSH};color:#ccc;}
 .rt-note{font-size:10.5px;color:#aaa;margin:-8px 0 10px 2px;}
-.sec-edit{background:none;border:none;color:${MAUVE};font-size:11px;cursor:pointer;opacity:.75;padding:0 0 0 4px;}
+.sec-edit{display:inline-flex;align-items:center;gap:5px;background:none;border:none;color:${MAUVE};font-size:11px;cursor:pointer;opacity:.75;padding:0 0 0 4px;}
 .rt-sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;}
 .kh-card{position:relative;}
 .kh-del{position:absolute;top:2px;right:3px;background:none;border:none;color:#ddd;font-size:10px;cursor:pointer;padding:2px;}
@@ -387,14 +390,14 @@ const css=`
 .btn-row-panel{display:flex;justify-content:space-between;gap:8px;margin-bottom:12px;}
 .btn-row-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;background:white;border-radius:20px;padding:12px 4px;box-shadow:5px 5px 12px rgba(107,69,48,0.14),-4px -4px 10px rgba(255,255,255,0.9);cursor:pointer;}
 .btn-row-circle{width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,0.9),${BLUSH} 60%,${GOLD} 100%);box-shadow:inset -2px -2px 4px rgba(74,40,23,0.15);}
-.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#3a2535;color:white;padding:9px 18px;border-radius:24px;font-size:11px;letter-spacing:.4px;z-index:500;animation:toastIn .25s ease;}
+.toast{display:flex;align-items:center;gap:6px;white-space:nowrap;position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#3a2535;color:white;padding:9px 18px;border-radius:24px;font-size:11px;letter-spacing:.4px;z-index:500;animation:toastIn .25s ease;}
 @keyframes toastIn{from{opacity:0;top:6px;}to{opacity:1;top:16px;}}
 `;
 
 const MY_CODE="MLYS";
 
-function Icon({name,size=16,strokeWidth=1.8}){
-  const p={width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth,strokeLinecap:"round",strokeLinejoin:"round"};
+function Icon({name,size=16,strokeWidth=1.8,style}){
+  const p={width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth,strokeLinecap:"round",strokeLinejoin:"round",style:{flexShrink:0,...style}};
   switch(name){
     case "home":return(<svg {...p}><path d="M3 11l9-7 9 7"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg>);
     case "calendar":return(<svg {...p}><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>);
@@ -404,8 +407,45 @@ function Icon({name,size=16,strokeWidth=1.8}){
     case "droplet":return(<svg {...p}><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>);
     case "moon":return(<svg {...p}><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></svg>);
     case "sparkle":return(<svg {...p}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/></svg>);
+    case "sparkles":return(<svg {...p}><path d="M11 3c.7 4.2 2.4 5.9 6.6 6.6-4.2.7-5.9 2.4-6.6 6.6-.7-4.2-2.4-5.9-6.6-6.6C8.6 8.9 10.3 7.2 11 3z"/><path d="M18.5 14.5c.3 1.9 1.1 2.7 3 3-1.9.3-2.7 1.1-3 3-.3-1.9-1.1-2.7-3-3 1.9-.3 2.7-1.1 3-3z"/></svg>);
+    case "plus":return(<svg {...p}><path d="M12 5v14M5 12h14"/></svg>);
+    case "x":return(<svg {...p}><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>);
+    case "tick":return(<svg {...p}><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>);
+    case "arrow":return(<svg {...p}><path d="M5 12h14M13 6l6 6-6 6"/></svg>);
+    case "pencil":return(<svg {...p}><path d="M4 20l1.1-4.6L15.6 4.9a2.1 2.1 0 0 1 3 3L8.1 18.4z"/><path d="M13.6 6.9l3 3"/></svg>);
+    case "heart":return(<svg {...p}><path d="M12 20s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z"/></svg>);
+    case "sun":return(<svg {...p}><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4"/></svg>);
+    case "dumbbell":return(<svg {...p}><rect x="4.5" y="7" width="3" height="10" rx="1.3"/><rect x="16.5" y="7" width="3" height="10" rx="1.3"/><path d="M2.5 10v4M21.5 10v4M7.5 12h9"/></svg>);
+    case "history":return(<svg {...p}><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5M12 8v4.2l2.8 1.8"/></svg>);
+    case "mail":return(<svg {...p}><rect x="3" y="5.5" width="18" height="13" rx="3"/><path d="M4.5 7.5l7.5 5.5 7.5-5.5"/></svg>);
+    case "star":return(<svg {...p}><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>);
+    case "book":return(<svg {...p}><path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5z"/><path d="M12 6.5v13"/></svg>);
+    case "shoe":return(<svg {...p}><path d="M3 17V9.5c1.6 0 3-1 3.5-2.5L9 9l3-1 2 3.5 5 1.3a2.6 2.6 0 0 1 2 2.5V17a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M3 15h18M10.4 11.4l1.6-.6M12 13.3l1.6-.6"/></svg>);
+    case "lotus":return(<svg {...p}><path d="M12 19c-2-1.6-3-4.4-3-7.3 0-2 1.2-4.2 3-5.7 1.8 1.5 3 3.7 3 5.7 0 2.9-1 5.7-3 7.3z"/><path d="M12 19c-4.2 0-7.6-2.6-8.5-6.5 2.3-.3 4.4.3 5.9 1.5M12 19c4.2 0 7.6-2.6 8.5-6.5-2.3-.3-4.4.3-5.9 1.5"/></svg>);
+    case "cup":return(<svg {...p}><path d="M6.5 8.5h11l-1.3 10.7a2 2 0 0 1-2 1.8H9.8a2 2 0 0 1-2-1.8z"/><path d="M5.5 8.5h13M13 8.5l1.8-5 2.4.6"/><circle cx="10" cy="17" r=".6"/><circle cx="12.5" cy="18" r=".6"/><circle cx="14" cy="15.8" r=".6"/></svg>);
+    case "bowl":return(<svg {...p}><path d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0z"/><path d="M9 20.5h6M9.5 8c0-1.3 1-1.6 1-2.9M13.5 8c0-1.3 1-1.6 1-2.9"/></svg>);
+    case "glass":return(<svg {...p}><path d="M6 4h12l-1.5 15a2 2 0 0 1-2 1.8h-5a2 2 0 0 1-2-1.8z"/><path d="M6.7 10.5h10.6"/></svg>);
+    case "leaf":return(<svg {...p}><path d="M5 19c0-8 5-14 15-14 0 9-6 14-13 14"/><path d="M5 19c3-4 6-7 10-9"/></svg>);
+    case "briefcase":return(<svg {...p}><rect x="3" y="7.5" width="18" height="12" rx="2.5"/><path d="M9 7.5V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5M3 12.5h18"/></svg>);
+    case "music":return(<svg {...p}><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>);
+    case "bed":return(<svg {...p}><path d="M3 18.5V6.5M3 14h18v4.5M21 14v-2.5a3 3 0 0 0-3-3h-7V14"/><circle cx="7" cy="11" r="1.8"/></svg>);
+    case "apple":return(<svg {...p}><path d="M12 8c-1.6-1-5-1.1-6.2 1.9-1.3 3.1.4 7.5 2.4 9.3 1.2 1.1 2.3.8 3.8.2 1.5.6 2.6.9 3.8-.2 2-1.8 3.7-6.2 2.4-9.3C17 6.9 13.6 7 12 8z"/><path d="M12 8c0-2 1-3.6 3-4.2"/></svg>);
+    case "pill":return(<svg {...p}><path d="M10.5 20.5a4.95 4.95 0 0 1-7-7l6-6a4.95 4.95 0 0 1 7 7z"/><path d="M7.5 10.5l6 6"/></svg>);
     default:return null;
   }
+}
+const ICON_CHOICES=["droplet","glass","moon","bed","lotus","book","heart","shoe","dumbbell","cup","bowl","apple","sun","leaf","flower","sparkles","star","briefcase","music","pill","flame","calendar","check","home"];
+const EMOJI_ICON={"💧":"droplet","🌙":"moon","🧘":"lotus","📖":"book","📚":"book","❤":"heart","💖":"heart","💕":"heart","👟":"shoe","🏃":"shoe","🚶":"shoe","🧋":"cup","☕":"cup","🍵":"cup","💪":"dumbbell","🏋":"dumbbell","🥪":"bowl","🥗":"bowl","🍳":"bowl","🍎":"apple","⭐":"star","🌟":"star","✨":"sparkles","🔥":"flame","🌸":"flower","🌷":"flower","☀":"sun","🌿":"leaf","🍃":"leaf","🌱":"leaf","💼":"briefcase","🎵":"music","🎶":"music","😴":"bed","🛏":"bed","💊":"pill","📅":"calendar","🗓":"calendar","✅":"check"};
+// Accepte un nom d'icône ou un ancien emoji enregistré
+function toIconName(v){
+  if(!v)return"star";
+  if(ICON_CHOICES.includes(v))return v;
+  return EMOJI_ICON[v.replace(/[\uFE0F\u200D\u2640\u2642\u{1F3FB}-\u{1F3FF}]/gu,"")]||null;
+}
+function HabIcon({v,size=18}){const n=toIconName(v);return n?<Icon name={n} size={size}/>:<span>{v}</span>;}
+function IconPicker({value,onChange}){
+  const cur=toIconName(value);
+  return(<div className="ipick">{ICON_CHOICES.map(n=><div key={n} className={`ipick-item${cur===n?" sel":""}`} onClick={()=>onChange(n)}><Icon name={n} size={18}/></div>)}</div>);
 }
 
 function App(){
@@ -424,7 +464,7 @@ function App(){
   const[editingTodo,setEditingTodo]=useState(null);
   const[habitModal,setHabitModal]=useState(false);
   const[editHabitId,setEditHabitId]=useState(null);
-  const[habitForm,setHabitForm]=useState({name:"",emoji:"⭐"});
+  const[habitForm,setHabitForm]=useState({name:"",emoji:"star"});
   const[toast,setToast]=useState(null);
   const[activePhase,setActivePhase]=useState(null);
   const[partnerCode,setPartnerCode]=useState("");
@@ -450,7 +490,7 @@ function App(){
   const[stepsForm,setStepsForm]=useState("");
   const[khModal,setKhModal]=useState(false);
   const[editKhId,setEditKhId]=useState(null);
-  const[khForm,setKhForm]=useState({label:"",sub:"",icon:"⭐"});
+  const[khForm,setKhForm]=useState({label:"",sub:"",icon:"star"});
   const touchRef=useRef({x:0,y:0});
 
   useEffect(()=>{save("ml_events",events);},[events]);
@@ -516,7 +556,7 @@ function App(){
     });
   };
   const openHabitEdit=(hab,e)=>{e.stopPropagation();setHabitForm({name:hab.name,emoji:hab.emoji});setEditHabitId(hab.id);setHabitModal(true);};
-  const openHabitAdd=()=>{setHabitForm({name:"",emoji:"⭐"});setEditHabitId(null);setHabitModal(true);};
+  const openHabitAdd=()=>{setHabitForm({name:"",emoji:"star"});setEditHabitId(null);setHabitModal(true);};
   const saveHabit=()=>{
     if(!habitForm.name.trim())return;
     if(editHabitId)setHabits(h=>h.map(x=>x.id===editHabitId?{...x,...habitForm}:x));
@@ -567,7 +607,7 @@ function App(){
   const copyCode=()=>{
     try{navigator.clipboard.writeText(MY_CODE);}catch(e){}
     setCopied(true);setTimeout(()=>setCopied(false),2000);
-    showToast("Code copié ! 💝");
+    showToast("Code copié !");
   };
 
   const todayStr=dStr(TODAY);
@@ -592,7 +632,7 @@ function App(){
     const orig=cycleModal.orig;
     setPeriods(ps=>[...ps.filter(p=>p.start!==orig&&p.start!==start),{start,end:end||null}].sort((a,b)=>a.start.localeCompare(b.start)));
     setCycleModal(null);
-    showToast(cycleModal.mode==="end"?"Fin des règles enregistrée 🌸":"Dates mises à jour 🌸");
+    showToast(cycleModal.mode==="end"?"Fin des règles enregistrée":"Dates mises à jour");
   };
   const delPeriod=()=>{setPeriods(ps=>ps.filter(p=>p.start!==cycleModal.orig));setCycleModal(null);};
 
@@ -600,16 +640,16 @@ function App(){
   const saveRules=()=>{
     setGoldenRules(rulesForm.split("\n").map(l=>l.trim()).filter(Boolean));
     setRulesModal(false);
-    showToast("Règles mises à jour 🌸");
+    showToast("Règles mises à jour");
   };
   const openStepsEdit=which=>{setStepsForm((which==="morning"?morningSteps:eveningSteps).join("\n"));setStepsModal(which);};
   const saveSteps=()=>{
     const arr=stepsForm.split("\n").map(l=>l.trim()).filter(Boolean);
     if(stepsModal==="morning")setMorningSteps(arr);else setEveningSteps(arr);
     setStepsModal(null);
-    showToast("Routine mise à jour 🌸");
+    showToast("Routine mise à jour");
   };
-  const openKhAdd=()=>{setKhForm({label:"",sub:"",icon:"⭐"});setEditKhId(null);setKhModal(true);};
+  const openKhAdd=()=>{setKhForm({label:"",sub:"",icon:"star"});setEditKhId(null);setKhModal(true);};
   const openKhEdit=kh=>{setKhForm({label:kh.label,sub:kh.sub,icon:kh.icon});setEditKhId(kh.id);setKhModal(true);};
   const saveKh=()=>{
     if(!khForm.label.trim())return;
@@ -637,12 +677,12 @@ function App(){
   return (
     <div className="app">
       <style>{css}</style>
-      {toast&&<div className="toast">{toast}</div>}
+      {toast&&<div className="toast"><Icon name="sparkles" size={12}/>{toast}</div>}
 
       <div className="hdr">
         <div className="hdr-row">
           <div>
-            <div style={{fontSize:9,color:MAUVE,letterSpacing:"1.2px",textTransform:"uppercase",fontWeight:300}}>Bonjour Maïlys ✨</div>
+            <div style={{fontSize:9,color:MAUVE,letterSpacing:"1.2px",textTransform:"uppercase",fontWeight:300}}>Bonjour Maïlys <Icon name="sparkles" size={10} style={{verticalAlign:"-1px"}}/></div>
             <div className="app-name">My <em>Life</em></div>
           </div>
           <div className="today-pill">{TODAY.toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</div>
@@ -660,7 +700,7 @@ function App(){
         {tab==="home"&&(
           <div>
             <div style={{textAlign:"center",padding:"4px 0 14px"}}>
-              <div style={{fontSize:9,color:MAUVE,letterSpacing:"1.4px",textTransform:"uppercase",fontWeight:500}}>Bonjour Maïlys ✨</div>
+              <div style={{fontSize:9,color:MAUVE,letterSpacing:"1.4px",textTransform:"uppercase",fontWeight:500}}>Bonjour Maïlys <Icon name="sparkles" size={10} style={{verticalAlign:"-1px"}}/></div>
               <div style={{fontFamily:"'Quicksand',sans-serif",fontWeight:600,fontSize:15,color:DARK,textTransform:"capitalize",marginTop:2}}>{TODAY.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</div>
             </div>
 
@@ -758,7 +798,7 @@ function App(){
                           return(
                             <div key={ev.id} className="epill" style={{background:c.light,color:c.text,borderLeft:`3px solid ${c.hex}`}} onClick={e=>openEdit(ev,e)}>
                               <span>{ev.title}{ev.endHour!=null&&<span className="ev-time-tag"> · {String(ev.hour).padStart(2,"0")}:{String(ev.min).padStart(2,"0")}–{String(ev.endHour).padStart(2,"0")}:{String(ev.endMin).padStart(2,"0")}</span>}</span>
-                              <button className="edel" onClick={e=>{e.stopPropagation();setEvents(es=>es.filter(x=>x.id!==ev.id));}}>✕</button>
+                              <button className="edel" onClick={e=>{e.stopPropagation();setEvents(es=>es.filter(x=>x.id!==ev.id));}}><Icon name="x" size={12}/></button>
                             </div>
                           );
                         })}
@@ -766,7 +806,7 @@ function App(){
                     </div>
                   );
                 })}
-                <button className="add-ev" onClick={openAdd}>＋ Ajouter un événement</button>
+                <button className="add-ev" onClick={openAdd}><Icon name="plus" size={14}/> Ajouter un événement</button>
               </div>
             )}
             {calView==="week"&&(
@@ -844,19 +884,19 @@ function App(){
             <div className="sec-title">Choses à Faire</div>
             <div className="tadd">
               <input className="tinput" placeholder="Ajouter une tâche..." value={todoInput} onChange={e=>setTodoInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addTodo()}/>
-              <button className="tadd-btn" onClick={addTodo}>＋</button>
+              <button className="tadd-btn" onClick={addTodo}><Icon name="plus" size={18} strokeWidth={2.2}/></button>
             </div>
             {pendTodos.length>0&&(
               <div>
                 <div className="glabel">À faire · {pendTodos.length}</div>
                 {pendTodos.map(t=>(
                   <div key={t.id} className="titem" onClick={()=>setEditingTodo(t.id===editingTodo?null:t.id)}>
-                    <div className={`tchk ${t.done?"on":""}`} onClick={e=>{e.stopPropagation();toggleTodo(t.id);}}>{t.done&&"✓"}</div>
+                    <div className={`tchk ${t.done?"on":""}`} onClick={e=>{e.stopPropagation();toggleTodo(t.id);}}>{t.done&&<Icon name="tick" size={11} strokeWidth={2.8}/>}</div>
                     {editingTodo===t.id
                       ?<input className="inline-edit" defaultValue={t.text} autoFocus onBlur={e=>saveTodoEdit(t.id,e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveTodoEdit(t.id,e.target.value);if(e.key==="Escape")setEditingTodo(null);}} onClick={e=>e.stopPropagation()}/>
                       :<div className="ttxt">{t.text}</div>
                     }
-                    <button className="tdel" onClick={e=>{e.stopPropagation();delTodo(t.id);}}>✕</button>
+                    <button className="tdel" onClick={e=>{e.stopPropagation();delTodo(t.id);}}><Icon name="x" size={13}/></button>
                   </div>
                 ))}
               </div>
@@ -866,14 +906,14 @@ function App(){
                 <div className="glabel">Complétées · {doneTodos.length}</div>
                 {doneTodos.map(t=>(
                   <div key={t.id} className="titem done">
-                    <div className="tchk on" onClick={e=>{e.stopPropagation();toggleTodo(t.id);}}>✓</div>
+                    <div className="tchk on" onClick={e=>{e.stopPropagation();toggleTodo(t.id);}}><Icon name="tick" size={11} strokeWidth={2.8}/></div>
                     <div className="ttxt">{t.text}</div>
-                    <button className="tdel" onClick={e=>{e.stopPropagation();delTodo(t.id);}}>✕</button>
+                    <button className="tdel" onClick={e=>{e.stopPropagation();delTodo(t.id);}}><Icon name="x" size={13}/></button>
                   </div>
                 ))}
               </div>
             )}
-            {todos.length===0&&<div style={{textAlign:"center",padding:"32px 0",color:"#ccc"}}><div style={{fontSize:26,marginBottom:5}}>🌸</div><div style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:13}}>Tout est à jour !</div></div>}
+            {todos.length===0&&<div style={{textAlign:"center",padding:"32px 0",color:"#ccc"}}><div style={{marginBottom:5}}><Icon name="flower" size={28}/></div><div style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:13}}>Tout est à jour !</div></div>}
           </div>
         )}
 
@@ -881,7 +921,7 @@ function App(){
           <div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:11}}>
               <div className="sec-title" style={{marginBottom:0}}>Habitudes</div>
-              <div style={{fontSize:10,color:MAUVE}}>{habits.filter(h=>(habitChecks[dStr(curHabitDate)]||[]).includes(h.id)).length}/{habits.length} ✓</div>
+              <div style={{fontSize:10,color:MAUVE}}>{habits.filter(h=>(habitChecks[dStr(curHabitDate)]||[]).includes(h.id)).length}/{habits.length} <Icon name="tick" size={10} strokeWidth={2.6} style={{verticalAlign:"-1px"}}/></div>
             </div>
             <div className="day-hdr" style={{marginBottom:9}}>
               <button className="arr" onClick={()=>setCurHabitDate(d=>addDays(d,-1))}>‹</button>
@@ -902,14 +942,14 @@ function App(){
               return(
                 <div key={hab.id} className={`hcard ${done?"done-h":""}`} onClick={()=>toggleHabit(hab.id)}>
                   <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:ac.border,borderRadius:"4px 0 0 4px"}}/>
-                  <div className="hemoji" style={{background:ac.bg}}>{hab.emoji}</div>
-                  <div style={{flex:1}}><div className="hname">{hab.name}</div><div className="hstreak">🔥 {hab.streak} jours</div></div>
-                  <div className={`hbigcheck ${done?"on":""}`} onClick={e=>{e.stopPropagation();toggleHabit(hab.id);}}>{done&&"✓"}</div>
-                  <button style={{background:"none",border:"none",color:"#ddd",fontSize:13,cursor:"pointer",padding:"0 0 0 3px",opacity:.6}} onClick={e=>openHabitEdit(hab,e)}>✏️</button>
+                  <div className="hemoji" style={{background:ac.bg}}><HabIcon v={hab.emoji} size={20}/></div>
+                  <div style={{flex:1}}><div className="hname">{hab.name}</div><div className="hstreak"><Icon name="flame" size={11}/> {hab.streak} jours</div></div>
+                  <div className={`hbigcheck ${done?"on":""}`} onClick={e=>{e.stopPropagation();toggleHabit(hab.id);}}>{done&&<Icon name="tick" size={13} strokeWidth={2.8}/>}</div>
+                  <button style={{background:"none",border:"none",color:MAUVE,cursor:"pointer",padding:"0 0 0 3px",opacity:.45,display:"flex"}} onClick={e=>openHabitEdit(hab,e)}><Icon name="pencil" size={15}/></button>
                 </div>
               );
             })}
-            <button className="add-h-btn" onClick={openHabitAdd}>＋ Nouvelle habitude</button>
+            <button className="add-h-btn" onClick={openHabitAdd}><Icon name="plus" size={14}/> Nouvelle habitude</button>
           </div>
         )}
 
@@ -919,23 +959,23 @@ function App(){
               <div className="rt-hero-label">Mission Body</div>
               <div className="rt-hero-title">Ma Routine</div>
               <div className="rt-hero-row">
-                <div className="rt-hero-chip">{currentPhase.icon} Phase {currentPhase.label}</div>
-                <div className="rt-hero-chip">🏋️ {getSportForPhase(currentPhase.key).title}</div>
+                <div className="rt-hero-chip"><Icon name={PHASE_ICON_NAME[currentPhase.key]} size={12}/> Phase {currentPhase.label}</div>
+                <div className="rt-hero-chip"><Icon name="dumbbell" size={12}/> {getSportForPhase(currentPhase.key).title}</div>
               </div>
             </div>
 
             <div className="rules-box">
               <div className="rt-sec-hdr">
                 <div className="rules-title" style={{marginBottom:0}}>Mes règles d'or</div>
-                <button className="sec-edit" onClick={openRulesEdit}>✏️ Modifier</button>
+                <button className="sec-edit" onClick={openRulesEdit}><Icon name="pencil" size={11}/> Modifier</button>
               </div>
               {goldenRules.map((r,i)=><div key={i} className="rule-row">{r}</div>)}
             </div>
 
             <div className="rt-block">
               <div className="rt-sec-hdr">
-                <div className="sec-title" style={{marginBottom:0}}>☀️ Matin</div>
-                <button className="sec-edit" onClick={()=>openStepsEdit("morning")}>✏️ Modifier</button>
+                <div className="sec-title" style={{marginBottom:0}}><Icon name="sun" size={17}/> Matin</div>
+                <button className="sec-edit" onClick={()=>openStepsEdit("morning")}><Icon name="pencil" size={11}/> Modifier</button>
               </div>
               <div className="rt-note">À partir de 7h à 7h30 (8h en vacances si couché tard)</div>
               {morningSteps.map((st,i)=>{
@@ -945,7 +985,7 @@ function App(){
                   <div key={id} className={`rt-step ${on?"on":""}`} onClick={()=>toggleRoutineStep(id)}>
                     <div className="rt-step-num">{i+1}</div>
                     <div className="rt-step-label">{st}</div>
-                    <div className={`rt-check ${on?"on":""}`}>{on&&"✓"}</div>
+                    <div className={`rt-check ${on?"on":""}`}>{on&&<Icon name="tick" size={10} strokeWidth={2.8}/>}</div>
                   </div>
                 );
               })}
@@ -953,8 +993,8 @@ function App(){
 
             <div className="rt-block">
               <div className="rt-sec-hdr">
-                <div className="sec-title" style={{marginBottom:0}}>🌙 Soir</div>
-                <button className="sec-edit" onClick={()=>openStepsEdit("evening")}>✏️ Modifier</button>
+                <div className="sec-title" style={{marginBottom:0}}><Icon name="moon" size={17}/> Soir</div>
+                <button className="sec-edit" onClick={()=>openStepsEdit("evening")}><Icon name="pencil" size={11}/> Modifier</button>
               </div>
               <div className="rt-note">Dès le retour à la maison, horaires flexibles</div>
               {eveningSteps.map((st,i)=>{
@@ -964,7 +1004,7 @@ function App(){
                   <div key={id} className={`rt-step ${on?"on":""}`} onClick={()=>toggleRoutineStep(id)}>
                     <div className="rt-step-num">{i+1}</div>
                     <div className="rt-step-label">{st}</div>
-                    <div className={`rt-check ${on?"on":""}`}>{on&&"✓"}</div>
+                    <div className={`rt-check ${on?"on":""}`}>{on&&<Icon name="tick" size={10} strokeWidth={2.8}/>}</div>
                   </div>
                 );
               })}
@@ -978,7 +1018,7 @@ function App(){
                 return(
                   <div key={i} className={`rt-week-row ${i===todayWeekIdx?"today":""}`}>
                     <div className="rt-week-day">{DAYS_FR[i]} {d.getDate()}</div>
-                    <div className="rt-week-work" style={{color:ph.color}}>{ph.icon} {ph.label}</div>
+                    <div className="rt-week-work" style={{color:ph.color,display:"flex",alignItems:"center",gap:4}}><Icon name={PHASE_ICON_NAME[ph.key]} size={12}/> {ph.label}</div>
                     <div className="rt-week-sport">{sp.title}</div>
                   </div>
                 );
@@ -991,12 +1031,12 @@ function App(){
             <div className="rt-habits-grid">
               {keyHabits.map(h=>(
                 <div key={h.id} className="rt-habit-card kh-card" onClick={()=>openKhEdit(h)}>
-                  <div className="rt-habit-icon">{h.icon}</div>
+                  <div className="rt-habit-icon"><HabIcon v={h.icon} size={16}/></div>
                   <div className="rt-habit-label">{h.label}</div>
                   <div className="rt-habit-sub">{h.sub}</div>
                 </div>
               ))}
-              <div className="add-kh-card" onClick={openKhAdd}>＋</div>
+              <div className="add-kh-card" onClick={openKhAdd}><Icon name="plus" size={20}/></div>
             </div>
           </div>
         )}
@@ -1018,13 +1058,13 @@ function App(){
                 <div className="cycle-hero-days">{daysLeft}</div>
                 <div className="cycle-hero-sub">jours · Jour {dayInCycle} du cycle · prévues le {fmtShort(cycle.upcoming[0].start)}</div>
               </>)}
-              <div className="cycle-phase-badge">{currentPhase.icon} Phase {currentPhase.label}</div>
+              <div className="cycle-phase-badge"><Icon name={PHASE_ICON_NAME[currentPhase.key]} size={12}/> Phase {currentPhase.label}</div>
               {cycle.openPeriod
-                ?<button className="cycle-edit-btn" onClick={openPeriodEnd}>✓ Mes règles sont terminées</button>
-                :<button className="cycle-edit-btn" onClick={openPeriodStart}>💧 Mes règles ont commencé</button>}
+                ?<button className="cycle-edit-btn" onClick={openPeriodEnd}><Icon name="tick" size={12} strokeWidth={2.4}/> Mes règles sont terminées</button>
+                :<button className="cycle-edit-btn" onClick={openPeriodStart}><Icon name="droplet" size={12}/> Mes règles ont commencé</button>}
             </div>
             <div className="symp-box">
-              <div className="symp-title">📅 Prochaines règles</div>
+              <div className="symp-title"><Icon name="calendar" size={16}/> Prochaines règles</div>
               <div className="symp-sub">Calculé sur tes cycles enregistrés · cycle moyen {cycle.cycleLen} j · règles {cycle.periodLen} j</div>
               {cycle.upcoming.map((u,i)=>(
                 <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderTop:i?`1px solid ${BLUSH}`:"none",fontSize:12,color:DARK}}>
@@ -1037,7 +1077,7 @@ function App(){
               {PHASES.map((ph,i)=>(
                 <div key={ph.key} className={`phase-card ${(activePhase===i||(activePhase===null&&ph.key===currentPhase.key))?"active":""}`}
                   style={{background:`linear-gradient(135deg,${ph.color},${ph.color}bb)`}} onClick={()=>setActivePhase(activePhase===i?null:i)}>
-                  <div className="phase-card-icon">{ph.icon}</div>
+                  <div className="phase-card-icon"><Icon name={PHASE_ICON_NAME[ph.key]} size={18}/></div>
                   <div className="phase-card-name">{ph.label.slice(0,6)}</div>
                 </div>
               ))}
@@ -1048,7 +1088,7 @@ function App(){
               <div className="symp-tags">{displayPhase.symptoms.map(s=><div key={s} className="symp-tag" style={{background:displayPhase.light,color:displayPhase.color}}>{s}</div>)}</div>
             </div>
             <div className="symp-box">
-              <div className="symp-title">🏋️ Sport recommandé</div>
+              <div className="symp-title"><Icon name="dumbbell" size={16}/> Sport recommandé</div>
               <div className="symp-sub">{getSportForPhase(displayPhase.key).title}</div>
               <div style={{fontSize:12,color:DARK,fontWeight:300,lineHeight:1.6}}>{getSportForPhase(displayPhase.key).tip}</div>
             </div>
@@ -1069,8 +1109,8 @@ function App(){
             </div>
             <div className="symp-box">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div className="symp-title">🗓️ Historique de mes règles</div>
-                <button className="copy-btn" onClick={()=>{setCycleForm({start:todayStr,end:""});setCycleModal({mode:"add"});}}>＋ Ajouter</button>
+                <div className="symp-title"><Icon name="history" size={16}/> Historique de mes règles</div>
+                <button className="copy-btn" onClick={()=>{setCycleForm({start:todayStr,end:""});setCycleModal({mode:"add"});}}><Icon name="plus" size={12}/> Ajouter</button>
               </div>
               <div className="symp-sub">Touche une ligne pour la modifier</div>
               {periods.length===0&&<div style={{fontSize:11,color:"#aaa"}}>Aucune règle enregistrée pour l'instant.</div>}
@@ -1086,13 +1126,13 @@ function App(){
               })}
             </div>
             <div className="partner-box">
-              <div className="partner-title">💝 Partager avec mon partenaire</div>
+              <div className="partner-title"><Icon name="heart" size={17}/> Partager avec mon partenaire</div>
               <div className="partner-sub">Donne ce code à Tom pour qu'il puisse suivre ton cycle.</div>
               <div className="partner-code-box">
                 <div className="partner-code">{MY_CODE}</div>
-                <button className="copy-btn" onClick={copyCode}>{copied?"Copié ✓":"Copier"}</button>
+                <button className="copy-btn" onClick={copyCode}>{copied?<>Copié <Icon name="tick" size={11} strokeWidth={2.6}/></>:"Copier"}</button>
               </div>
-              <div className="partner-hint">Tom entre ce code dans sa section Cycle 💌</div>
+              <div className="partner-hint">Tom entre ce code dans sa section Cycle <Icon name="mail" size={11} style={{verticalAlign:"-1.5px"}}/></div>
               <div className="partner-divider">— ou —</div>
               <div style={{fontSize:11,color:"#aaa",marginBottom:7}}>Entrer le code de quelqu'un d'autre</div>
               {partnerView?(
@@ -1100,7 +1140,7 @@ function App(){
                   <div className="pview-hero" style={{background:`linear-gradient(135deg,${partnerView.phase.color},${partnerView.phase.color}bb)`}}>
                     <div className="pview-label">Règles dans</div>
                     <div className="pview-days">{partnerView.days} jours</div>
-                    <div className="pview-phase">{partnerView.phase.icon} Phase {partnerView.phase.label}</div>
+                    <div className="pview-phase"><Icon name={PHASE_ICON_NAME[partnerView.phase.key]} size={12}/> Phase {partnerView.phase.label}</div>
                   </div>
                   <div className="pview-name">Connecté à {partnerView.name}</div>
                   <button className="disconnect-btn" onClick={()=>{setPartnerView(null);setPartnerCode("");}}>Se déconnecter</button>
@@ -1109,9 +1149,9 @@ function App(){
                 <div>
                   <div className="pinput-row">
                     <input className="pinput" maxLength={4} placeholder="CODE" value={partnerCode} onChange={e=>{setPartnerCode(e.target.value.toUpperCase());setPartnerError(false);}} onKeyDown={e=>e.key==="Enter"&&connectPartner()}/>
-                    <button className="pconnect-btn" onClick={connectPartner}>Voir →</button>
+                    <button className="pconnect-btn" onClick={connectPartner}>Voir <Icon name="arrow" size={13}/></button>
                   </div>
-                  {partnerError&&<div style={{fontSize:10,color:"#e87070",marginTop:5,textAlign:"center"}}>Code incorrect 💬</div>}
+                  {partnerError&&<div style={{fontSize:10,color:"#e87070",marginTop:5,textAlign:"center"}}>Code incorrect</div>}
                 </div>
               )}
             </div>
@@ -1150,7 +1190,8 @@ function App(){
           <div className="modal" onClick={e=>e.stopPropagation()}>
             <div className="mod-title">{editHabitId?"Modifier":"Nouvelle habitude"}</div>
             <input className="minput" placeholder="Nom de l'habitude" value={habitForm.name} onChange={e=>setHabitForm({...habitForm,name:e.target.value})}/>
-            <input className="minput" placeholder="Emoji (ex: 🏃‍♀️)" value={habitForm.emoji} onChange={e=>setHabitForm({...habitForm,emoji:e.target.value})}/>
+            <div style={{fontSize:10,color:"#bbb",letterSpacing:".4px",marginBottom:7}}>Icône</div>
+            <IconPicker value={habitForm.emoji} onChange={v=>setHabitForm({...habitForm,emoji:v})}/>
             <div className="macts">
               {editHabitId&&<button className="bdel" onClick={delHabit}>Supprimer</button>}
               <button className="bcanc" onClick={()=>setHabitModal(false)}>Annuler</button>
@@ -1216,7 +1257,8 @@ function App(){
             <div className="mod-title">{editKhId?"Modifier":"Nouvelle habitude clé"}</div>
             <input className="minput" placeholder="Nom (ex: Hydratation)" value={khForm.label} onChange={e=>setKhForm({...khForm,label:e.target.value})}/>
             <input className="minput" placeholder="Détail (ex: 2L / jour)" value={khForm.sub} onChange={e=>setKhForm({...khForm,sub:e.target.value})}/>
-            <input className="minput" placeholder="Emoji (ex: 💧)" value={khForm.icon} onChange={e=>setKhForm({...khForm,icon:e.target.value})}/>
+            <div style={{fontSize:10,color:"#bbb",letterSpacing:".4px",marginBottom:7}}>Icône</div>
+            <IconPicker value={khForm.icon} onChange={v=>setKhForm({...khForm,icon:v})}/>
             <div className="macts">
               {editKhId&&<button className="bdel" onClick={delKh}>Supprimer</button>}
               <button className="bcanc" onClick={()=>setKhModal(false)}>Annuler</button>
@@ -1227,7 +1269,7 @@ function App(){
       )}
 
       <div className="bnav" style={{justifyContent:"center"}}>
-        <button className="nbc" style={{marginTop:0}} onClick={()=>{if(tab==="calendar")openAdd();else if(tab==="todo"){setTodoInput("");setTimeout(()=>document.querySelector(".tinput")?.focus(),50);}else if(tab==="habits")openHabitAdd();else setTab("home");}}>{["calendar","todo","habits"].includes(tab)?"＋":<Icon name="home" size={19}/>}</button>
+        <button className="nbc" style={{marginTop:0}} onClick={()=>{if(tab==="calendar")openAdd();else if(tab==="todo"){setTodoInput("");setTimeout(()=>document.querySelector(".tinput")?.focus(),50);}else if(tab==="habits")openHabitAdd();else setTab("home");}}>{["calendar","todo","habits"].includes(tab)?<Icon name="plus" size={22} strokeWidth={2.2}/>:<Icon name="home" size={19}/>}</button>
       </div>
     </div>
   );
