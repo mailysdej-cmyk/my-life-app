@@ -42,13 +42,68 @@ const PHASES=[
   {key:"ovulation",label:"Ovulation",days:"Jour 15 à 17",color:"#a97c4f",light:"rgba(169,124,79,0.20)",icon:"💜",symptoms:["Pic d'énergie","Sociabilité","Sensibilité","Légère douleur pelvienne"]},
   {key:"luteale",label:"Lutéale",days:"Jour 18 à 32",color:"#8a6a4a",light:"rgba(138,106,74,0.18)",icon:"🌙",symptoms:["SPM possible","Besoin de calme","Ballonnements","Envies alimentaires"]},
 ];
-function getDayOfCycle(date,start=CYCLE_START){
-  const ms=date-start,days=Math.floor(ms/86400000);
-  return((days%CYCLE_LEN)+CYCLE_LEN)%CYCLE_LEN+1;
+function parseD(s){return new Date(s+"T00:00:00");}
+function dayDiff(a,b){return Math.round((new Date(a.getFullYear(),a.getMonth(),a.getDate())-new Date(b.getFullYear(),b.getMonth(),b.getDate()))/86400000);}
+function fmtShort(d){return`${d.getDate()} ${MONTHS_S[d.getMonth()]}`;}
+// Phases d'un cycle de longueur len avec des règles de pl jours (ovulation ~14 j avant les règles suivantes)
+function phaseRanges(len,pl){const ov=Math.max(pl+1,len-17);return{ovStart:ov,ovEnd:ov+2};}
+function getPhaseForInfo(info){
+  if(info.day<=info.pl)return PHASES[0];
+  const{ovStart,ovEnd}=phaseRanges(info.len,info.pl);
+  if(info.day<ovStart)return PHASES[1];
+  if(info.day<=ovEnd)return PHASES[2];
+  return PHASES[3];
 }
-function getPhaseForDay(d){if(d<=PERIOD_LEN)return PHASES[0];if(d<=14)return PHASES[1];if(d<=17)return PHASES[2];return PHASES[3];}
-function getPhaseForDate(date,start=CYCLE_START){return getPhaseForDay(getDayOfCycle(date,start));}
-function daysUntilNext(from,start=CYCLE_START){return CYCLE_LEN-getDayOfCycle(from,start)+1;}
+function phaseDaysLabel(key,len,pl){
+  const{ovStart,ovEnd}=phaseRanges(len,pl);
+  const r={menstruelle:[1,pl],folliculaire:[pl+1,ovStart-1],ovulation:[ovStart,ovEnd],luteale:[ovEnd+1,len]}[key];
+  return`Jour ${r[0]} à ${r[1]}`;
+}
+// Construit le modèle du cycle à partir des règles enregistrées [{start:"YYYY-MM-DD",end:"YYYY-MM-DD"|null}]
+function buildCycle(periods){
+  const today=parseD(dStr(TODAY));
+  const avg=a=>a.reduce((s,x)=>s+x,0)/a.length;
+  let ps=periods.filter(p=>p&&p.start).slice().sort((a,b)=>a.start.localeCompare(b.start));
+  if(!ps.length){
+    const k=Math.max(0,Math.floor(dayDiff(today,CYCLE_START)/CYCLE_LEN));
+    ps=[{start:dStr(addDays(CYCLE_START,k*CYCLE_LEN)),end:null}];
+  }
+  const starts=ps.map(p=>parseD(p.start));
+  const gaps=[];
+  for(let i=1;i<starts.length;i++){const g=dayDiff(starts[i],starts[i-1]);if(g>=18&&g<=60)gaps.push(g);}
+  const cycleLen=gaps.length?Math.round(avg(gaps.slice(-6))):CYCLE_LEN;
+  const durs=ps.filter(p=>p.end).map(p=>dayDiff(parseD(p.end),parseD(p.start))+1).filter(d=>d>=1&&d<=15);
+  const periodLen=durs.length?Math.round(avg(durs.slice(-6))):PERIOD_LEN;
+  const durOf=p=>p.end?Math.max(1,dayDiff(parseD(p.end),parseD(p.start))+1):periodLen;
+  const n=ps.length,last=ps[n-1],lastStart=starts[n-1];
+  const predictedNext=addDays(lastStart,cycleLen);
+  const late=Math.max(0,dayDiff(today,predictedNext));
+  // Début des cycles projetés : la date prévue, ou demain si les règles sont en retard
+  const base=late>0?addDays(today,1):predictedNext;
+
+  const infoFor=date=>{
+    let i=-1;
+    for(let k=n-1;k>=0;k--)if(dayDiff(date,starts[k])>=0){i=k;break;}
+    if(i===-1){
+      const x=dayDiff(date,starts[0]);
+      return{day:((x%cycleLen)+cycleLen)%cycleLen+1,len:cycleLen,pl:periodLen,predicted:true};
+    }
+    if(i<n-1)return{day:dayDiff(date,starts[i])+1,len:dayDiff(starts[i+1],starts[i]),pl:durOf(ps[i]),predicted:false};
+    if(dayDiff(date,base)<0)return{day:dayDiff(date,lastStart)+1,len:Math.max(cycleLen,dayDiff(base,lastStart)),pl:durOf(last),predicted:!last.end&&dayDiff(date,today)>0};
+    return{day:dayDiff(date,base)%cycleLen+1,len:cycleLen,pl:periodLen,predicted:true};
+  };
+  const phaseFor=date=>getPhaseForInfo(infoFor(date));
+  const todayInfo=infoFor(today);
+  const inPeriod=todayInfo.day<=todayInfo.pl;
+  const upcoming=[0,1,2].map(k=>{const s=addDays(base,k*cycleLen);return{start:s,end:addDays(s,periodLen-1)};});
+  return{
+    periods:ps,cycleLen,periodLen,infoFor,phaseFor,
+    today:todayInfo,phase:getPhaseForInfo(todayInfo),inPeriod,late:inPeriod?0:late,
+    daysLeft:Math.max(0,dayDiff(base,today)),
+    openPeriod:!last.end&&dayDiff(today,lastStart)>=0&&dayDiff(today,lastStart)<15?last:null,
+    upcoming,
+  };
+}
 function dStr(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
 function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
 function sameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
@@ -376,9 +431,14 @@ function App(){
   const[partnerView,setPartnerView]=useState(null);
   const[partnerError,setPartnerError]=useState(false);
   const[copied,setCopied]=useState(false);
-  const[cycleStart,setCycleStart]=useState(()=>{const s=load("ml_cycle_start",null);return s?new Date(s+"T00:00:00"):CYCLE_START;});
-  const[cycleModal,setCycleModal]=useState(false);
-  const[cycleForm,setCycleForm]=useState("");
+  const[periods,setPeriods]=useState(()=>{
+    const p=load("ml_periods",null);
+    if(Array.isArray(p))return p;
+    const s=load("ml_cycle_start",null); // ancien format : une seule date de début
+    return s?[{start:s,end:null}]:[];
+  });
+  const[cycleModal,setCycleModal]=useState(null);
+  const[cycleForm,setCycleForm]=useState({start:"",end:""});
   const[routineChecks,setRoutineChecks]=useState(()=>load("ml_routine_checks",{}));
   const[goldenRules,setGoldenRules]=useState(()=>load("ml_golden_rules",DEF_GOLDEN_RULES));
   const[morningSteps,setMorningSteps]=useState(()=>load("ml_morning_steps",DEF_MORNING_STEPS));
@@ -397,7 +457,7 @@ function App(){
   useEffect(()=>{save("ml_todos",todos);},[todos]);
   useEffect(()=>{save("ml_habits",habits);},[habits]);
   useEffect(()=>{save("ml_habit_checks",habitChecks);},[habitChecks]);
-  useEffect(()=>{save("ml_cycle_start",dStr(cycleStart));},[cycleStart]);
+  useEffect(()=>{save("ml_periods",periods);},[periods]);
   useEffect(()=>{save("ml_routine_checks",routineChecks);},[routineChecks]);
   useEffect(()=>{save("ml_golden_rules",goldenRules);},[goldenRules]);
   useEffect(()=>{save("ml_morning_steps",morningSteps);},[morningSteps]);
@@ -465,9 +525,12 @@ function App(){
   };
   const delHabit=()=>{setHabits(h=>h.filter(x=>x.id!==editHabitId));setHabitModal(false);};
 
-  const currentPhase=getPhaseForDate(TODAY,cycleStart);
-  const daysLeft=daysUntilNext(TODAY,cycleStart);
-  const dayInCycle=getDayOfCycle(TODAY,cycleStart);
+  const cycle=buildCycle(periods);
+  const currentPhase=cycle.phase;
+  const daysLeft=cycle.daysLeft;
+  const dayInCycle=cycle.today.day;
+  const cycleLenNow=Math.max(cycle.today.len,dayInCycle);
+  const cycleStatus=cycle.inPeriod?"en règles":cycle.late>0?`${cycle.late}j de retard`:`${daysLeft}j avant règles`;
   const displayPhase=activePhase!==null?PHASES[activePhase]:currentPhase;
 
   const mkCycleGrid=()=>{
@@ -481,9 +544,15 @@ function App(){
     return cells.map((c,i)=>{
       if(!c.cur)return React.createElement("div",{key:i,style:{aspectRatio:"1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#ddd"}},c.d);
       const date=new Date(y,m,c.d);
-      const ph=getPhaseForDate(date,cycleStart);
+      const info=cycle.infoFor(date);
+      const ph=getPhaseForInfo(info);
       const tod=isToday(date);
-      return React.createElement("div",{key:i,className:`cycle-cday${tod?" tod":""}`,style:{background:ph.light,color:ph.color}},c.d);
+      const isPeriod=ph.key==="menstruelle";
+      // Règles enregistrées : pastille pleine ; règles prévues : contour en pointillés
+      const st=isPeriod&&!info.predicted?{background:ph.color,color:"white",fontWeight:500}
+        :isPeriod?{background:ph.light,color:ph.color,border:`1.5px dashed ${ph.color}`}
+        :{background:ph.light,color:ph.color};
+      return React.createElement("div",{key:i,className:`cycle-cday${tod?" tod":""}`,style:st},c.d);
     });
   };
 
@@ -491,8 +560,7 @@ function App(){
     const code=partnerCode.trim().toUpperCase();
     if(!code){setPartnerError(true);return;}
     // Simuler la connexion
-    const ph=getPhaseForDate(TODAY,cycleStart);
-    setPartnerView({phase:ph,days:daysLeft,name:code==="MLYS"?"Maïlys":"Partenaire"});
+    setPartnerView({phase:currentPhase,days:daysLeft,name:code==="MLYS"?"Maïlys":"Partenaire"});
     setPartnerError(false);
   };
 
@@ -514,13 +582,19 @@ function App(){
   const routineWeekDays=Array.from({length:7},(_,i)=>addDays(getWkStart(TODAY),i));
   const todayWeekIdx=(TODAY.getDay()+6)%7;
 
-  const openCycleEdit=()=>{setCycleForm(dStr(cycleStart));setCycleModal(true);};
+  const openPeriodStart=()=>{setCycleForm({start:todayStr,end:""});setCycleModal({mode:"start"});};
+  const openPeriodEnd=()=>{setCycleForm({start:cycle.openPeriod.start,end:todayStr});setCycleModal({mode:"end",orig:cycle.openPeriod.start});};
+  const openPeriodEdit=p=>{setCycleForm({start:p.start,end:p.end||""});setCycleModal({mode:"edit",orig:p.start});};
   const saveCycleEdit=()=>{
-    if(!cycleForm)return;
-    setCycleStart(new Date(cycleForm+"T00:00:00"));
-    setCycleModal(false);
-    showToast("Dates mises à jour 🌸");
+    const{start,end}=cycleForm;
+    if(!start)return;
+    if(end&&end<start){showToast("La fin doit être après le début");return;}
+    const orig=cycleModal.orig;
+    setPeriods(ps=>[...ps.filter(p=>p.start!==orig&&p.start!==start),{start,end:end||null}].sort((a,b)=>a.start.localeCompare(b.start)));
+    setCycleModal(null);
+    showToast(cycleModal.mode==="end"?"Fin des règles enregistrée 🌸":"Dates mises à jour 🌸");
   };
+  const delPeriod=()=>{setPeriods(ps=>ps.filter(p=>p.start!==cycleModal.orig));setCycleModal(null);};
 
   const openRulesEdit=()=>{setRulesForm(goldenRules.join("\n"));setRulesModal(true);};
   const saveRules=()=>{
@@ -593,18 +667,18 @@ function App(){
             <div className="bento-grid">
               <div className="bento-card bento-tall" onClick={()=>setTab("cycle")}>
                 <div className="bento-label"><Icon name={PHASE_ICON_NAME[currentPhase.key]} size={13}/> Cycle</div>
-                {(()=>{const pct=Math.round((dayInCycle/CYCLE_LEN)*100);const ang=(pct/100)*360-90;const rad=32;const mx=39+rad*Math.cos(ang*Math.PI/180);const my=39+rad*Math.sin(ang*Math.PI/180);return(
+                {(()=>{const pct=Math.round((dayInCycle/cycleLenNow)*100);const ang=(pct/100)*360-90;const rad=32;const mx=39+rad*Math.cos(ang*Math.PI/180);const my=39+rad*Math.sin(ang*Math.PI/180);return(
                   <div className="ring-marble">
                     <div className="ring-marble-inner" style={{background:`conic-gradient(${MAUVE} ${pct}%, ${BLUSH} ${pct}% 100%)`}}>
                       <div className="ring-marble-core" style={{width:56,height:56}}>
                         <div style={{fontSize:16,fontFamily:"'Quicksand',sans-serif",fontWeight:700,color:DARK}}>{dayInCycle}</div>
-                        <div style={{fontSize:8,color:MAUVE}}>/ {CYCLE_LEN}j</div>
+                        <div style={{fontSize:8,color:MAUVE}}>/ {cycleLenNow}j</div>
                       </div>
                     </div>
                     <div className="ring-marble-dot" style={{width:14,height:14,left:mx-7,top:my-7}}/>
                   </div>
                 );})()}
-                <div style={{textAlign:"center",fontSize:10.5,color:MAUVE,marginTop:8}}>{currentPhase.label} · {daysLeft}j avant règles</div>
+                <div style={{textAlign:"center",fontSize:10.5,color:MAUVE,marginTop:8}}>{currentPhase.label} · {cycleStatus}</div>
               </div>
 
               <div className="bento-card" onClick={()=>setTab("habits")}>
@@ -899,7 +973,7 @@ function App(){
             <div className="sec-title">Semaine type · selon ton cycle</div>
             <div className="rt-week-table">
               {routineWeekDays.map((d,i)=>{
-                const ph=getPhaseForDate(d,cycleStart);
+                const ph=cycle.phaseFor(d);
                 const sp=getSportForPhase(ph.key);
                 return(
                   <div key={i} className={`rt-week-row ${i===todayWeekIdx?"today":""}`}>
@@ -931,11 +1005,33 @@ function App(){
           <div>
             <div className="cycle-hero" style={{background:`linear-gradient(135deg,${currentPhase.color},${currentPhase.color}cc)`}}>
               <div className="cycle-deco"/><div className="cycle-deco2"/>
-              <div className="cycle-hero-label">Règles dans</div>
-              <div className="cycle-hero-days">{daysLeft}</div>
-              <div className="cycle-hero-sub">jours · Jour {dayInCycle} du cycle</div>
+              {cycle.inPeriod?(<>
+                <div className="cycle-hero-label">Règles en cours</div>
+                <div className="cycle-hero-days">J{dayInCycle}</div>
+                <div className="cycle-hero-sub">{cycle.openPeriod?`fin estimée le ${fmtShort(addDays(parseD(cycle.openPeriod.start),cycle.periodLen-1))}`:"de tes règles"}</div>
+              </>):cycle.late>0?(<>
+                <div className="cycle-hero-label">Retard</div>
+                <div className="cycle-hero-days">{cycle.late}</div>
+                <div className="cycle-hero-sub">jour{cycle.late>1?"s":""} de retard · Jour {dayInCycle} du cycle</div>
+              </>):(<>
+                <div className="cycle-hero-label">Règles dans</div>
+                <div className="cycle-hero-days">{daysLeft}</div>
+                <div className="cycle-hero-sub">jours · Jour {dayInCycle} du cycle · prévues le {fmtShort(cycle.upcoming[0].start)}</div>
+              </>)}
               <div className="cycle-phase-badge">{currentPhase.icon} Phase {currentPhase.label}</div>
-              <button className="cycle-edit-btn" onClick={openCycleEdit}>✏️ Modifier la date de mes dernières règles</button>
+              {cycle.openPeriod
+                ?<button className="cycle-edit-btn" onClick={openPeriodEnd}>✓ Mes règles sont terminées</button>
+                :<button className="cycle-edit-btn" onClick={openPeriodStart}>💧 Mes règles ont commencé</button>}
+            </div>
+            <div className="symp-box">
+              <div className="symp-title">📅 Prochaines règles</div>
+              <div className="symp-sub">Calculé sur tes cycles enregistrés · cycle moyen {cycle.cycleLen} j · règles {cycle.periodLen} j</div>
+              {cycle.upcoming.map((u,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderTop:i?`1px solid ${BLUSH}`:"none",fontSize:12,color:DARK}}>
+                  <span>{fmtShort(u.start)} → {fmtShort(u.end)}</span>
+                  <span style={{fontSize:10,color:"#aaa"}}>dans {Math.max(0,dayDiff(u.start,TODAY))} j</span>
+                </div>
+              ))}
             </div>
             <div className="phase-row">
               {PHASES.map((ph,i)=>(
@@ -948,7 +1044,7 @@ function App(){
             </div>
             <div className="symp-box">
               <div className="symp-title">Phase {displayPhase.label}</div>
-              <div className="symp-sub">{displayPhase.days} — Symptômes fréquents</div>
+              <div className="symp-sub">{phaseDaysLabel(displayPhase.key,cycle.cycleLen,cycle.periodLen)} — Symptômes fréquents</div>
               <div className="symp-tags">{displayPhase.symptoms.map(s=><div key={s} className="symp-tag" style={{background:displayPhase.light,color:displayPhase.color}}>{s}</div>)}</div>
             </div>
             <div className="symp-box">
@@ -966,7 +1062,29 @@ function App(){
               {PHASES.map(ph=><div key={ph.key} style={{display:"flex",alignItems:"center",gap:3,fontSize:9,color:"#888"}}><div style={{width:8,height:8,borderRadius:"50%",background:ph.color}}/>{ph.label}</div>)}
             </div>
             <div className="wlabels">{DAYS_FR.map(d=><div key={d} className="wlabel">{d}</div>)}</div>
-            <div className="cycle-cgrid" style={{marginBottom:16}}>{mkCycleGrid()}</div>
+            <div className="cycle-cgrid" style={{marginBottom:6}}>{mkCycleGrid()}</div>
+            <div style={{display:"flex",gap:12,fontSize:9,color:"#888",marginBottom:16}}>
+              <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,borderRadius:"50%",background:PHASES[0].color}}/>Règles enregistrées</span>
+              <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,borderRadius:"50%",border:`1.5px dashed ${PHASES[0].color}`}}/>Règles prévues</span>
+            </div>
+            <div className="symp-box">
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div className="symp-title">🗓️ Historique de mes règles</div>
+                <button className="copy-btn" onClick={()=>{setCycleForm({start:todayStr,end:""});setCycleModal({mode:"add"});}}>＋ Ajouter</button>
+              </div>
+              <div className="symp-sub">Touche une ligne pour la modifier</div>
+              {periods.length===0&&<div style={{fontSize:11,color:"#aaa"}}>Aucune règle enregistrée pour l'instant.</div>}
+              {[...periods].sort((a,b)=>b.start.localeCompare(a.start)).map((p,i,arr)=>{
+                const s=parseD(p.start),dur=p.end?dayDiff(parseD(p.end),s)+1:null;
+                const next=i>0?parseD(arr[i-1].start):null;
+                return(
+                  <div key={p.start} onClick={()=>openPeriodEdit(p)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderTop:i?`1px solid ${BLUSH}`:"none",cursor:"pointer",fontSize:12,color:DARK}}>
+                    <span>{fmtShort(s)} {s.getFullYear()!==TODAY.getFullYear()?s.getFullYear():""} → {p.end?fmtShort(parseD(p.end)):<i style={{color:"#aaa"}}>en cours</i>}</span>
+                    <span style={{fontSize:10,color:"#aaa",textAlign:"right"}}>{dur?`${dur} j de règles`:""}{next?`${dur?" · ":""}cycle ${dayDiff(next,s)} j`:""}</span>
+                  </div>
+                );
+              })}
+            </div>
             <div className="partner-box">
               <div className="partner-title">💝 Partager avec mon partenaire</div>
               <div className="partner-sub">Donne ce code à Tom pour qu'il puisse suivre ton cycle.</div>
@@ -1043,13 +1161,21 @@ function App(){
       )}
 
       {cycleModal&&(
-        <div className="overlay" onClick={()=>setCycleModal(false)}>
+        <div className="overlay" onClick={()=>setCycleModal(null)}>
           <div className="modal" onClick={e=>e.stopPropagation()}>
-            <div className="mod-title">Modifier mes dernières règles</div>
-            <div style={{fontSize:11,color:"#aaa",marginBottom:10,textAlign:"center",lineHeight:1.5}}>Choisis le 1er jour de tes dernières règles pour recaler le cycle.</div>
-            <input className="minput" type="date" value={cycleForm} onChange={e=>setCycleForm(e.target.value)}/>
+            <div className="mod-title">{{start:"Début des règles",end:"Fin des règles",edit:"Modifier mes règles",add:"Ajouter des règles"}[cycleModal.mode]}</div>
+            <div style={{fontSize:11,color:"#aaa",marginBottom:10,textAlign:"center",lineHeight:1.5}}>
+              {cycleModal.mode==="end"?"Choisis le dernier jour de tes règles.":"Indique le 1er jour et, si tu le connais, le dernier jour de tes règles."}
+            </div>
+            {cycleModal.mode!=="end"&&<>
+              <div style={{fontSize:10,color:"#bbb",letterSpacing:".4px",marginBottom:5}}>1er jour</div>
+              <input className="minput" type="date" value={cycleForm.start} onChange={e=>setCycleForm({...cycleForm,start:e.target.value})}/>
+            </>}
+            <div style={{fontSize:10,color:"#bbb",letterSpacing:".4px",marginBottom:5}}>Dernier jour{cycleModal.mode==="end"?"":" (optionnel)"}</div>
+            <input className="minput" type="date" min={cycleForm.start} value={cycleForm.end} onChange={e=>setCycleForm({...cycleForm,end:e.target.value})}/>
             <div className="macts">
-              <button className="bcanc" onClick={()=>setCycleModal(false)}>Annuler</button>
+              {cycleModal.mode==="edit"&&<button className="bdel" onClick={delPeriod}>Supprimer</button>}
+              <button className="bcanc" onClick={()=>setCycleModal(null)}>Annuler</button>
               <button className="bsave" onClick={saveCycleEdit}>Enregistrer</button>
             </div>
           </div>
