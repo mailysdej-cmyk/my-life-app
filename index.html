@@ -332,7 +332,6 @@ const css=`
 .rules-box{background:white;border-radius:22px;padding:14px 16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(107,69,48,0.22);}
 .rules-title{font-family:'Quicksand',sans-serif;font-weight:600;font-size:15px;color:${DARK};margin-bottom:9px;}
 .rule-row{display:flex;align-items:flex-start;gap:7px;font-size:12px;color:${DARK};padding:4px 0;font-weight:300;}
-.rule-row::before{content:'✓';color:${GOLD};font-weight:700;flex-shrink:0;}
 .rt-block{margin-bottom:16px;}
 .rt-step{display:flex;align-items:center;gap:10px;padding:9px 12px;background:white;border-radius:18px;margin-bottom:6px;box-shadow:0 2px 6px rgba(107,69,48,0.18);cursor:pointer;transition:all .18s;}
 .rt-step.on{opacity:.55;}
@@ -436,13 +435,18 @@ function Icon({name,size=16,strokeWidth=1.8,style}){
 }
 const ICON_CHOICES=["droplet","glass","moon","bed","lotus","book","heart","shoe","dumbbell","cup","bowl","apple","sun","leaf","flower","sparkles","star","briefcase","music","pill","flame","calendar","check","home"];
 const EMOJI_ICON={"💧":"droplet","🌙":"moon","🧘":"lotus","📖":"book","📚":"book","❤":"heart","💖":"heart","💕":"heart","👟":"shoe","🏃":"shoe","🚶":"shoe","🧋":"cup","☕":"cup","🍵":"cup","💪":"dumbbell","🏋":"dumbbell","🥪":"bowl","🥗":"bowl","🍳":"bowl","🍎":"apple","⭐":"star","🌟":"star","✨":"sparkles","🔥":"flame","🌸":"flower","🌷":"flower","☀":"sun","🌿":"leaf","🍃":"leaf","🌱":"leaf","💼":"briefcase","🎵":"music","🎶":"music","😴":"bed","🛏":"bed","💊":"pill","📅":"calendar","🗓":"calendar","✅":"check"};
-// Accepte un nom d'icône ou un ancien emoji enregistré
-function toIconName(v){
-  if(!v)return"star";
+// Retire les emojis d'un texte (données déjà enregistrées ou nouvelle saisie)
+function noEmoji(v){return String(v??"").replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\uFE0F\u200D\u20E3]/gu,"").replace(/\s{2,}/g," ").trim();}
+const NAME_ICON=[[/eau|hydrat|boire/i,"glass"],[/sport|muscu|gym|fitness|pilates/i,"dumbbell"],[/m[ée]dit|yoga|respir/i,"lotus"],[/lect|lire|livre/i,"book"],[/sommeil|dormir|coucher|sieste/i,"bed"],[/\bpas\b|march|course|courir|running/i,"shoe"],[/petit|d[ée]j|repas|manger|cuisine/i,"bowl"],[/gratitude|amour|couple|tom/i,"heart"],[/business|travail|boulot|work|projet/i,"briefcase"],[/musique|piano|chant|guitare/i,"music"],[/vitamine|m[ée]dic|pilule/i,"pill"],[/fruit|l[ée]gume|sain/i,"apple"],[/visage|skin|soin|beaut[ée]|make/i,"sparkles"],[/soleil|matin|r[ée]veil/i,"sun"],[/nature|plante|jardin|dehors/i,"leaf"],[/th[ée]|caf[ée]|boisson/i,"cup"]];
+// Accepte un nom d'icône ou un ancien emoji enregistré ; sinon devine d'après le nom de l'habitude
+function toIconName(v,name){
   if(ICON_CHOICES.includes(v))return v;
-  return EMOJI_ICON[v.replace(/[\uFE0F\u200D\u2640\u2642\u{1F3FB}-\u{1F3FF}]/gu,"")]||null;
+  const e=v&&EMOJI_ICON[String(v).replace(/[\uFE0F\u200D\u2640\u2642\u{1F3FB}-\u{1F3FF}]/gu,"")];
+  if(e)return e;
+  const g=name&&NAME_ICON.find(([re])=>re.test(name));
+  return g?g[1]:"star";
 }
-function HabIcon({v,size=18}){const n=toIconName(v);return n?<Icon name={n} size={size}/>:<span>{v}</span>;}
+function HabIcon({v,name,size=18}){return <Icon name={toIconName(v,name)} size={size}/>;}
 function IconPicker({value,onChange}){
   const cur=toIconName(value);
   return(<div className="ipick">{ICON_CHOICES.map(n=><div key={n} className={`ipick-item${cur===n?" sel":""}`} onClick={()=>onChange(n)}><Icon name={n} size={18}/></div>)}</div>);
@@ -453,9 +457,9 @@ function App(){
   const[calView,setCalView]=useState("day");
   const[curDate,setCurDate]=useState(new Date(TODAY));
   const[calMonth,setCalMonth]=useState({y:TODAY.getFullYear(),m:TODAY.getMonth()});
-  const[events,setEvents]=useState(()=>load("ml_events",DEF_EVENTS));
-  const[todos,setTodos]=useState(()=>load("ml_todos",DEF_TODOS));
-  const[habits,setHabits]=useState(()=>load("ml_habits",DEF_HABITS));
+  const[events,setEvents]=useState(()=>load("ml_events",DEF_EVENTS).map(e=>({...e,title:noEmoji(e.title)})));
+  const[todos,setTodos]=useState(()=>load("ml_todos",DEF_TODOS).map(t=>({...t,text:noEmoji(t.text)})));
+  const[habits,setHabits]=useState(()=>load("ml_habits",DEF_HABITS).map(h=>({...h,name:noEmoji(h.name),emoji:toIconName(h.emoji,h.name)})));
   const[habitChecks,setHabitChecks]=useState(()=>load("ml_habit_checks",{}));
   const[curHabitDate,setCurHabitDate]=useState(new Date(TODAY));
   const[todoInput,setTodoInput]=useState("");
@@ -480,10 +484,10 @@ function App(){
   const[cycleModal,setCycleModal]=useState(null);
   const[cycleForm,setCycleForm]=useState({start:"",end:""});
   const[routineChecks,setRoutineChecks]=useState(()=>load("ml_routine_checks",{}));
-  const[goldenRules,setGoldenRules]=useState(()=>load("ml_golden_rules",DEF_GOLDEN_RULES));
-  const[morningSteps,setMorningSteps]=useState(()=>load("ml_morning_steps",DEF_MORNING_STEPS));
-  const[eveningSteps,setEveningSteps]=useState(()=>load("ml_evening_steps",DEF_EVENING_STEPS));
-  const[keyHabits,setKeyHabits]=useState(()=>load("ml_key_habits",DEF_KEY_HABITS));
+  const[goldenRules,setGoldenRules]=useState(()=>load("ml_golden_rules",DEF_GOLDEN_RULES).map(noEmoji).filter(Boolean));
+  const[morningSteps,setMorningSteps]=useState(()=>load("ml_morning_steps",DEF_MORNING_STEPS).map(noEmoji).filter(Boolean));
+  const[eveningSteps,setEveningSteps]=useState(()=>load("ml_evening_steps",DEF_EVENING_STEPS).map(noEmoji).filter(Boolean));
+  const[keyHabits,setKeyHabits]=useState(()=>load("ml_key_habits",DEF_KEY_HABITS).map(k=>({...k,label:noEmoji(k.label),sub:noEmoji(k.sub),icon:toIconName(k.icon,k.label)})));
   const[rulesModal,setRulesModal]=useState(false);
   const[rulesForm,setRulesForm]=useState("");
   const[stepsModal,setStepsModal]=useState(null);
@@ -532,18 +536,19 @@ function App(){
     });
   };
 
-  const addTodo=()=>{if(!todoInput.trim())return;setTodos(t=>[...t,{id:Date.now(),text:todoInput.trim(),done:false}]);setTodoInput("");};
+  const addTodo=()=>{const txt=noEmoji(todoInput);if(!txt)return;setTodos(t=>[...t,{id:Date.now(),text:txt,done:false}]);setTodoInput("");};
   const toggleTodo=id=>setTodos(t=>t.map(x=>x.id===id?{...x,done:!x.done}:x));
   const delTodo=id=>setTodos(t=>t.filter(x=>x.id!==id));
-  const saveTodoEdit=(id,val)=>{if(val.trim())setTodos(t=>t.map(x=>x.id===id?{...x,text:val.trim()}:x));setEditingTodo(null);};
+  const saveTodoEdit=(id,val)=>{const txt=noEmoji(val);if(txt)setTodos(t=>t.map(x=>x.id===id?{...x,text:txt}:x));setEditingTodo(null);};
   const openAdd=()=>{setForm({title:"",hour:"09",min:"00",endHour:"",endMin:"",color:"pink"});setModal({mode:"add"});};
   const openEdit=(ev,e)=>{e.stopPropagation();setForm({title:ev.title,hour:String(ev.hour).padStart(2,"0"),min:String(ev.min||0).padStart(2,"0"),endHour:ev.endHour!=null?String(ev.endHour).padStart(2,"0"):"",endMin:ev.endHour!=null?String(ev.endMin||0).padStart(2,"0"):"",color:ev.color});setModal({mode:"edit",ev});};
   const saveEv=()=>{
-    if(!form.title.trim())return;
+    const title=noEmoji(form.title);
+    if(!title)return;
     const hasEnd=form.endHour!=="";
     const extra=hasEnd?{endHour:parseInt(form.endHour),endMin:parseInt(form.endMin||0)}:{endHour:null,endMin:null};
-    if(modal.mode==="add")setEvents(ev=>[...ev,{id:Date.now(),date:selStr,hour:parseInt(form.hour),min:parseInt(form.min),title:form.title,color:form.color,...extra}]);
-    else setEvents(ev=>ev.map(e=>e.id===modal.ev.id?{...e,title:form.title,hour:parseInt(form.hour),min:parseInt(form.min),color:form.color,...extra}:e));
+    if(modal.mode==="add")setEvents(ev=>[...ev,{id:Date.now(),date:selStr,hour:parseInt(form.hour),min:parseInt(form.min),title,color:form.color,...extra}]);
+    else setEvents(ev=>ev.map(e=>e.id===modal.ev.id?{...e,title,hour:parseInt(form.hour),min:parseInt(form.min),color:form.color,...extra}:e));
     setModal(null);
   };
   const delEv=()=>{setEvents(ev=>ev.filter(e=>e.id!==modal.ev.id));setModal(null);};
@@ -558,9 +563,10 @@ function App(){
   const openHabitEdit=(hab,e)=>{e.stopPropagation();setHabitForm({name:hab.name,emoji:hab.emoji});setEditHabitId(hab.id);setHabitModal(true);};
   const openHabitAdd=()=>{setHabitForm({name:"",emoji:"star"});setEditHabitId(null);setHabitModal(true);};
   const saveHabit=()=>{
-    if(!habitForm.name.trim())return;
-    if(editHabitId)setHabits(h=>h.map(x=>x.id===editHabitId?{...x,...habitForm}:x));
-    else setHabits(h=>[...h,{id:Date.now(),...habitForm,color:"pink",done:false,streak:0}]);
+    const hf={...habitForm,name:noEmoji(habitForm.name)};
+    if(!hf.name)return;
+    if(editHabitId)setHabits(h=>h.map(x=>x.id===editHabitId?{...x,...hf}:x));
+    else setHabits(h=>[...h,{id:Date.now(),...hf,color:"pink",done:false,streak:0}]);
     setHabitModal(false);
   };
   const delHabit=()=>{setHabits(h=>h.filter(x=>x.id!==editHabitId));setHabitModal(false);};
@@ -638,13 +644,13 @@ function App(){
 
   const openRulesEdit=()=>{setRulesForm(goldenRules.join("\n"));setRulesModal(true);};
   const saveRules=()=>{
-    setGoldenRules(rulesForm.split("\n").map(l=>l.trim()).filter(Boolean));
+    setGoldenRules(rulesForm.split("\n").map(noEmoji).filter(Boolean));
     setRulesModal(false);
     showToast("Règles mises à jour");
   };
   const openStepsEdit=which=>{setStepsForm((which==="morning"?morningSteps:eveningSteps).join("\n"));setStepsModal(which);};
   const saveSteps=()=>{
-    const arr=stepsForm.split("\n").map(l=>l.trim()).filter(Boolean);
+    const arr=stepsForm.split("\n").map(noEmoji).filter(Boolean);
     if(stepsModal==="morning")setMorningSteps(arr);else setEveningSteps(arr);
     setStepsModal(null);
     showToast("Routine mise à jour");
@@ -652,9 +658,10 @@ function App(){
   const openKhAdd=()=>{setKhForm({label:"",sub:"",icon:"star"});setEditKhId(null);setKhModal(true);};
   const openKhEdit=kh=>{setKhForm({label:kh.label,sub:kh.sub,icon:kh.icon});setEditKhId(kh.id);setKhModal(true);};
   const saveKh=()=>{
-    if(!khForm.label.trim())return;
-    if(editKhId)setKeyHabits(k=>k.map(x=>x.id===editKhId?{...x,...khForm}:x));
-    else setKeyHabits(k=>[...k,{id:Date.now(),...khForm}]);
+    const kf={...khForm,label:noEmoji(khForm.label),sub:noEmoji(khForm.sub)};
+    if(!kf.label)return;
+    if(editKhId)setKeyHabits(k=>k.map(x=>x.id===editKhId?{...x,...kf}:x));
+    else setKeyHabits(k=>[...k,{id:Date.now(),...kf}]);
     setKhModal(false);
   };
   const delKh=()=>{setKeyHabits(k=>k.filter(x=>x.id!==editKhId));setKhModal(false);};
@@ -942,7 +949,7 @@ function App(){
               return(
                 <div key={hab.id} className={`hcard ${done?"done-h":""}`} onClick={()=>toggleHabit(hab.id)}>
                   <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:ac.border,borderRadius:"4px 0 0 4px"}}/>
-                  <div className="hemoji" style={{background:ac.bg}}><HabIcon v={hab.emoji} size={20}/></div>
+                  <div className="hemoji" style={{background:ac.bg}}><HabIcon v={hab.emoji} name={hab.name} size={20}/></div>
                   <div style={{flex:1}}><div className="hname">{hab.name}</div><div className="hstreak"><Icon name="flame" size={11}/> {hab.streak} jours</div></div>
                   <div className={`hbigcheck ${done?"on":""}`} onClick={e=>{e.stopPropagation();toggleHabit(hab.id);}}>{done&&<Icon name="tick" size={13} strokeWidth={2.8}/>}</div>
                   <button style={{background:"none",border:"none",color:MAUVE,cursor:"pointer",padding:"0 0 0 3px",opacity:.45,display:"flex"}} onClick={e=>openHabitEdit(hab,e)}><Icon name="pencil" size={15}/></button>
@@ -969,7 +976,7 @@ function App(){
                 <div className="rules-title" style={{marginBottom:0}}>Mes règles d'or</div>
                 <button className="sec-edit" onClick={openRulesEdit}><Icon name="pencil" size={11}/> Modifier</button>
               </div>
-              {goldenRules.map((r,i)=><div key={i} className="rule-row">{r}</div>)}
+              {goldenRules.map((r,i)=><div key={i} className="rule-row"><Icon name="tick" size={13} strokeWidth={2.4} style={{color:GOLD,marginTop:1}}/>{r}</div>)}
             </div>
 
             <div className="rt-block">
@@ -1031,7 +1038,7 @@ function App(){
             <div className="rt-habits-grid">
               {keyHabits.map(h=>(
                 <div key={h.id} className="rt-habit-card kh-card" onClick={()=>openKhEdit(h)}>
-                  <div className="rt-habit-icon"><HabIcon v={h.icon} size={16}/></div>
+                  <div className="rt-habit-icon"><HabIcon v={h.icon} name={h.label} size={16}/></div>
                   <div className="rt-habit-label">{h.label}</div>
                   <div className="rt-habit-sub">{h.sub}</div>
                 </div>
@@ -1068,7 +1075,7 @@ function App(){
               <div className="symp-sub">Calculé sur tes cycles enregistrés · cycle moyen {cycle.cycleLen} j · règles {cycle.periodLen} j</div>
               {cycle.upcoming.map((u,i)=>(
                 <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderTop:i?`1px solid ${BLUSH}`:"none",fontSize:12,color:DARK}}>
-                  <span>{fmtShort(u.start)} → {fmtShort(u.end)}</span>
+                  <span style={{display:"flex",alignItems:"center",gap:6}}>{fmtShort(u.start)} <Icon name="arrow" size={12} style={{color:"#bbb"}}/> {fmtShort(u.end)}</span>
                   <span style={{fontSize:10,color:"#aaa"}}>dans {Math.max(0,dayDiff(u.start,TODAY))} j</span>
                 </div>
               ))}
@@ -1119,7 +1126,7 @@ function App(){
                 const next=i>0?parseD(arr[i-1].start):null;
                 return(
                   <div key={p.start} onClick={()=>openPeriodEdit(p)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderTop:i?`1px solid ${BLUSH}`:"none",cursor:"pointer",fontSize:12,color:DARK}}>
-                    <span>{fmtShort(s)} {s.getFullYear()!==TODAY.getFullYear()?s.getFullYear():""} → {p.end?fmtShort(parseD(p.end)):<i style={{color:"#aaa"}}>en cours</i>}</span>
+                    <span style={{display:"flex",alignItems:"center",gap:6}}>{fmtShort(s)} {s.getFullYear()!==TODAY.getFullYear()?s.getFullYear():""} <Icon name="arrow" size={12} style={{color:"#bbb"}}/> {p.end?fmtShort(parseD(p.end)):<i style={{color:"#aaa"}}>en cours</i>}</span>
                     <span style={{fontSize:10,color:"#aaa",textAlign:"right"}}>{dur?`${dur} j de règles`:""}{next?`${dur?" · ":""}cycle ${dayDiff(next,s)} j`:""}</span>
                   </div>
                 );
