@@ -62,3 +62,6 @@ $job$);
 select cron.schedule('serelys-cleanup', '23 3 * * *', $job$
   delete from cron.job_run_details where end_time < now() - interval '3 days';
 $job$);
+
+-- 4. Demander à Supabase de voir tout de suite les nouvelles tables
+notify pgrst, 'reload schema';
