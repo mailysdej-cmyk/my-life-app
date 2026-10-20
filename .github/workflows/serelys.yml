@@ -46,7 +46,7 @@ jobs:
           supabase functions deploy notify --project-ref "$REF" --no-verify-jwt --use-api
 
   keepalive:
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: serelys } }
     steps:
@@ -57,3 +57,5 @@ jobs:
           KEY=$(grep -oE "SUPABASE_ANON_KEY = '[^']+'" js/config.js | sed -E "s/.*'(.+)'/\1/")
           if [ -z "$URL" ]; then echo "Pas encore configuré"; exit 0; fi
           curl -fsS -X POST "$URL/functions/v1/notify" -H "apikey: $KEY" -H "Content-Type: application/json" -d '{"action":"ping"}'
+          echo
+          curl -fsS -X POST "$URL/functions/v1/notify" -H "apikey: $KEY" -H "Content-Type: application/json" -d '{"action":"vapid"}' | head -c 60
