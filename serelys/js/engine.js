@@ -249,9 +249,6 @@ function oneshotItems(c, ctx) {
     const above = Object.entries(config.plans).find(([, p]) => p.rank === rank + 1);
     if (above) items.push({ id: 'filleule', label: `Cadeau de parrainage : 1 one-shot offert du forfait ${above[1].label} (au choix)` });
   }
-  if (c.style === 'perso') {
-    items.unshift({ id: 'apercu', label: 'Envoyer l’aperçu du style personnalisé (puis jusqu’à 2 séries d’ajustements)' });
-  }
   return items;
 }
 
@@ -300,6 +297,9 @@ function onboardingTasks(c, ctx) {
       title: `Mettre en place ${n}`, items, step: true, blocked: allDocs ? null : 'Tant qu’il manque un des 4 éléments, je n’allume aucun moteur.', softBlock: true });
   }
   if (d.paidStart && isDate(c.contractSignedDate)) {
+    if (c.style === 'perso') {
+      add({ key: k('apercu'), date: d.paidStart, title: `Envoyer à ${n} l’aperçu de son style personnalisé (puis jusqu’à 2 séries d’ajustements)`, step: true });
+    }
     add({ key: k('oneshots'), date: d.paidStart, title: `Livrer les documents uniques de ${n} (style ${STYLES[c.style] || 'classique'})`, items: oneshotItems(c, ctx), step: true });
   }
   return out;
@@ -332,6 +332,11 @@ function monthlyTasks(c, ctx, fromYm, toYm) {
         t.items = list.map((l, i) => ({ id: `l${i}`, label: fill(l, vars) }));
       }
       if (r.id === 'visio-proposer') t.autoDone = !!c.visios?.[m];
+      if (r.id === 'newsletter-check') {
+        // Pas de vérification tant qu'aucune newsletter n'a été préparée le mois d'avant (1er mois de la cliente)
+        const prep = dateIn(addMonthsYm(m, -1), config.rules.find((x) => x.id === 'newsletter-prep')?.day || 20);
+        if (prep < start || !clientServices(c, config, prep).some((x) => x.id === 'newsletter')) continue;
+      }
       if (r.id === 'infos-recues') {
         t.question = true;
         const st = ctx.taskState[key];
