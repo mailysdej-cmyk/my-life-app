@@ -66,7 +66,7 @@ function Login({ onDone }) {
           ? html`<button class="btn primary block" disabled=${busy} onClick=${() => go(() => store.signUp(email, pw))}>Créer mon compte</button>
                  <button class="btn ghost block" onClick=${() => setMode('login')}>J’ai déjà un compte</button>`
           : html`<button class="btn primary block" disabled=${busy} onClick=${() => go(() => store.signIn(email, pw))}>Me connecter</button>
-                 <button class="btn ghost block small" onClick=${() => setMode('signup')}>Première fois ? Créer mon compte</button>`}`}
+                 ${new URLSearchParams(location.search).has('inscription') ? html`<button class="btn ghost block small" onClick=${() => setMode('signup')}>Première fois ? Créer mon compte</button>` : null}`}`}
       ${err ? html`<div class="warn" style="margin-top:12px">${err}</div>` : null}
     </div>
   </div>`;
