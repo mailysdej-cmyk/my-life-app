@@ -35,7 +35,7 @@ jobs:
           echo "REF=$REF" >> "$GITHUB_ENV"
       - name: Pas encore configuré
         if: env.SUPABASE_ACCESS_TOKEN == '' || env.REF == ''
-        run: echo "Clé SUPABASE_ACCESS_TOKEN ou adresse du projet manquante : déploiement ignoré."
+        run: echo 'Clé SUPABASE_ACCESS_TOKEN ou adresse du projet manquante, déploiement ignoré.'
       - uses: supabase/setup-cli@v1
         if: env.SUPABASE_ACCESS_TOKEN != '' && env.REF != ''
         with: { version: 2.20.12 }

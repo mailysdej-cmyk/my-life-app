@@ -1,6 +1,6 @@
 // Service worker Serelys : fonctionnement hors ligne et notifications.
 // Portée limitée au dossier /serelys/ : n'agit pas sur l'appli My Life.
-const CACHE = 'serelys-v1';
+const CACHE = 'serelys-v2';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'vendor/preact-htm.js', 'vendor/supabase.js',
