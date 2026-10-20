@@ -1,11 +1,11 @@
 // Service worker Serelys : fonctionnement hors ligne et notifications.
 // Portée limitée au dossier /serelys/ : n'agit pas sur l'appli My Life.
-const CACHE = 'serelys-v2';
+const CACHE = 'serelys-v3';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'vendor/preact-htm.js', 'vendor/supabase.js',
   'js/app.js', 'js/ui.js', 'js/store.js', 'js/push.js', 'js/config.js', 'js/engine.js', 'js/catalog.js', 'js/dates.js',
-  'js/screens/clients.js', 'js/screens/money.js', 'js/screens/prospects.js', 'js/screens/cards.js', 'js/screens/settings.js',
+  'version.json', 'js/screens/clients.js', 'js/screens/money.js', 'js/screens/prospects.js', 'js/screens/cards.js', 'js/screens/settings.js',
   'icons/icon-192.png', 'icons/apple-touch-icon.png',
 ];
 
@@ -21,7 +21,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin || !url.pathname.startsWith(new URL(self.registration.scope).pathname)) return;
   e.respondWith(
-    fetch(e.request).then((r) => {
+    fetch(e.request, { cache: 'no-cache' }).then((r) => {
       if (r.ok) { const copy = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
       return r;
     }).catch(() => caches.match(e.request, { ignoreSearch: true }).then((r) => r || caches.match('index.html')))

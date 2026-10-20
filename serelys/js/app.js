@@ -231,7 +231,22 @@ function App() {
     <${Toast} msg=${toast} />`;
 }
 
+// Mise à jour automatique : si une nouvelle version est publiée, l'appli se recharge
+// d'elle-même quand on la rouvre (pas besoin de la réinstaller).
+async function currentVersion() {
+  try { const r = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' }); return (await r.json()).version; } catch { return null; }
+}
+async function watchUpdates() {
+  const loaded = await currentVersion();
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible' || !loaded) return;
+    const v = await currentVersion();
+    if (v && v !== loaded) location.reload();
+  });
+}
+
 export async function start() {
+  watchUpdates();
   store = await createStore();
   if (store.demo) await store.load();
   render(html`<${App} />`, document.getElementById('app'));
