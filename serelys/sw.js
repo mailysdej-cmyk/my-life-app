@@ -1,10 +1,10 @@
 // Service worker Serelys : fonctionnement hors ligne et notifications.
 // Portée limitée au dossier /serelys/ : n'agit pas sur l'appli My Life.
-const CACHE = 'serelys-v3';
+const CACHE = 'serelys-v4';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'vendor/preact-htm.js', 'vendor/supabase.js',
-  'js/app.js', 'js/ui.js', 'js/store.js', 'js/push.js', 'js/config.js', 'js/engine.js', 'js/catalog.js', 'js/dates.js',
+  'js/main.js', 'js/app.js', 'js/ui.js', 'js/store.js', 'js/push.js', 'js/config.js', 'js/engine.js', 'js/catalog.js', 'js/dates.js',
   'version.json', 'js/screens/clients.js', 'js/screens/money.js', 'js/screens/prospects.js', 'js/screens/cards.js', 'js/screens/settings.js',
   'icons/icon-192.png', 'icons/apple-touch-icon.png',
 ];

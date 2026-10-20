@@ -9,6 +9,9 @@ on:
     - cron: '17 5 * * *'   # réveil quotidien de la base (2e sécurité contre la mise en veille)
   workflow_dispatch:
 
+permissions:
+  contents: read   # le jeton GitHub de ce fichier ne peut rien modifier dans le dépôt
+
 jobs:
   tests:
     if: github.event_name != 'schedule'
