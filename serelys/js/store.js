@@ -127,7 +127,7 @@ export async function createStore() {
       return store.session();
     },
     async signUp(email, password) {
-      const { data, error } = await sb.auth.signUp({ email, password });
+      const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
       if (error) throw new Error(frError(error.message));
       return data.session ? store.session() : { ok: false, confirm: true };
     },
