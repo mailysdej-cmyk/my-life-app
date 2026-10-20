@@ -479,7 +479,7 @@ function prospectTasks(ctx) {
 export function computeAll(state, today, { monthsAhead = 3 } = {}) {
   const ctx = makeContext(state, today);
   const toYm = addMonthsYm(ym(today), monthsAhead);
-  const trackingStart = ctx.settings.trackingStart ? day(ctx.settings.trackingStart) : addDays(today, -60);
+  const trackingStart = ctx.settings.trackingStart ? day(ctx.settings.trackingStart) : today;
   const fromYm = ym(trackingStart);
   const invoices = computeInvoices(ctx, toYm);
   let tasks = [];
