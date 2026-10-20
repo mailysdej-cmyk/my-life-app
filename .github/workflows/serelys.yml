@@ -1,0 +1,59 @@
+# Serelys uniquement (dossier serelys/) : n'agit pas sur l'appli My Life.
+name: Serelys
+
+on:
+  push:
+    branches: [main]
+    paths: ['serelys/**', '.github/workflows/serelys.yml']
+  schedule:
+    - cron: '17 5 * * *'   # réveil quotidien de la base (2e sécurité contre la mise en veille)
+  workflow_dispatch:
+
+jobs:
+  tests:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: serelys } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm test
+
+  deploy-function:
+    needs: tests
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: serelys } }
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Projet Supabase (lu dans js/config.js)
+        run: |
+          REF=$(grep -oE 'https://[a-z0-9]+\.supabase\.co' js/config.js | head -1 | sed -E 's#https://([a-z0-9]+)\..*#\1#')
+          echo "REF=$REF" >> "$GITHUB_ENV"
+      - name: Pas encore configuré
+        if: env.SUPABASE_ACCESS_TOKEN == '' || env.REF == ''
+        run: echo "Clé SUPABASE_ACCESS_TOKEN ou adresse du projet manquante : déploiement ignoré."
+      - uses: supabase/setup-cli@v1
+        if: env.SUPABASE_ACCESS_TOKEN != '' && env.REF != ''
+        with: { version: 2.20.12 }
+      - name: Déployer le programme des notifications
+        if: env.SUPABASE_ACCESS_TOKEN != '' && env.REF != ''
+        run: |
+          cp js/engine.js js/catalog.js js/dates.js supabase/functions/notify/
+          supabase functions deploy notify --project-ref "$REF" --no-verify-jwt --use-api
+
+  keepalive:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: serelys } }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Réveiller la base
+        run: |
+          URL=$(grep -oE 'https://[a-z0-9]+\.supabase\.co' js/config.js | head -1)
+          KEY=$(grep -oE "SUPABASE_ANON_KEY = '[^']+'" js/config.js | sed -E "s/.*'(.+)'/\1/")
+          if [ -z "$URL" ]; then echo "Pas encore configuré"; exit 0; fi
+          curl -fsS -X POST "$URL/functions/v1/notify" -H "apikey: $KEY" -H "Content-Type: application/json" -d '{"action":"ping"}'

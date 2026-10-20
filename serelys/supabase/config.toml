@@ -1,0 +1,5 @@
+# Réglages minimaux pour déployer la fonction « notify » (voir .github/workflows/serelys.yml)
+project_id = "serelys"
+
+[functions.notify]
+verify_jwt = false
