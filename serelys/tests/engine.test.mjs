@@ -64,6 +64,7 @@ test('Confort avec une prestation ajoutée à l’essai : 890 puis 980 après l�
   assert.match(prog.title, /décembre/);
   const nl = find(all, 'c:B:newsletter-prep:2026-11');
   assert.equal(nl.date, '2026-11-20'); assert.equal(nl.due, '2026-11-24');
+  assert.equal(find(all, 'c:B:newsletter-check:2026-11'), undefined);
   assert.equal(find(all, 'c:B:newsletter-check:2026-12').date, '2026-12-02');
   assert.ok(find(all, 'c:B:visio-proposer:2026-11'), 'la visio ajoutée crée la tâche du 1er');
   assert.equal(find(all, 'c:B:moteurs:2026-11').items.length, 7, 'Essentiel + newsletter');
@@ -87,9 +88,11 @@ test('Premium filleule : 990 − 50 sur la 1re facture, tâches Premium', () => 
   assert.equal(find(all, 'c:C:echeances-check:2026-12').date, '2026-12-07');
   assert.equal(find(all, 'c:C:moteurs:2026-11').items.length, 8, 'mêmes + newsletter + événements (suivi des échéances pas encore actif)');
   const os = find(all, 'c:C:ob:oneshots');
-  assert.ok(os.items.some((i) => i.id === 'apercu'), 'style personnalisé');
   assert.ok(!os.items.some((i) => i.id === 'filleule'), 'Premium : remise de 50 € à la place');
-  assert.equal(os.items.length, 1 + 8);
+  assert.equal(os.items.length, 8, '8 documents uniques en Premium');
+  assert.equal(find(all, 'c:C:ob:apercu').date, '2026-11-01', 'style personnalisé : tâche séparée');
+  assert.equal(find(all, 'c:C:newsletter-check:2026-11'), undefined, 'pas de vérification de newsletter le 1er mois');
+  assert.equal(find(all, 'c:C:newsletter-check:2026-12').date, '2026-12-02');
 });
 
 test('Parrainage : 150 € chez la marraine après paiement de la 1re facture de la filleule', () => {
