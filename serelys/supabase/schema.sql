@@ -19,19 +19,20 @@ grant select, insert, update, delete on public.items to authenticated;
 revoke all on public.items from anon;
 
 -- Accès réservé à la propriétaire des lignes ; si la double authentification est
--- activée, l'accès exige aussi le code (niveau aal2).
+-- activée, l'accès exige aussi le code (niveau aal2). La vérification passe par une
+-- fonction, car un compte connecté n'a pas le droit de lire auth.mfa_factors.
+create or replace function public.serelys_access_ok() returns boolean
+language sql stable security definer set search_path = '' as $fn$
+  select coalesce((select auth.jwt() ->> 'aal') = 'aal2', false)
+      or not exists (select 1 from auth.mfa_factors f where f.user_id = (select auth.uid()) and f.status = 'verified');
+$fn$;
+revoke all on function public.serelys_access_ok() from public, anon;
+grant execute on function public.serelys_access_ok() to authenticated;
+
 drop policy if exists serelys_own on public.items;
 create policy serelys_own on public.items for all to authenticated
-  using (
-    user_id = (select auth.uid())
-    and ((select auth.jwt() ->> 'aal') = 'aal2'
-         or not exists (select 1 from auth.mfa_factors f where f.user_id = (select auth.uid()) and f.status = 'verified'))
-  )
-  with check (
-    user_id = (select auth.uid())
-    and ((select auth.jwt() ->> 'aal') = 'aal2'
-         or not exists (select 1 from auth.mfa_factors f where f.user_id = (select auth.uid()) and f.status = 'verified'))
-  );
+  using (user_id = (select auth.uid()) and (select public.serelys_access_ok()))
+  with check (user_id = (select auth.uid()) and (select public.serelys_access_ok()));
 
 -- 2. Réglages internes du programme (clés des notifications…) : inaccessibles depuis l'appli
 create table if not exists public.system (k text primary key, v jsonb);
