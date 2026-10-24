@@ -84,6 +84,7 @@ function Activity({ settings, save }) {
     <h3>Avant la première signature</h3>
     <${Field} label="Souscrire mon assurance RC pro : le"><${Input} type="date" value=${settings.rcProDate || ''} onChange=${(v) => save({ rcProDate: v || null })} /></${Field}>
     <${Field} label="Créer mon auto-entreprise : le"><${Input} type="date" value=${settings.aeTaskDate || ''} onChange=${(v) => save({ aeTaskDate: v || null })} /></${Field}>
+    <${Field} label="Date anniversaire de mon assurance RC pro" hint="Chaque année à cette date : « Renouveler mon assurance RC pro »."><${Input} type="date" value=${settings.rcProRenewal ? `${new Date().getFullYear()}-${settings.rcProRenewal}` : ''} onChange=${(v) => save({ rcProRenewal: v ? v.slice(5, 10) : null })} /></${Field}>
     <h3>Rappels annuels et uniques</h3>
     <${Field} label="Relire mes obligations d’entrepreneuse, chaque année le"><${Input} type="date" value=${`${new Date().getFullYear()}-${settings.obligationsDate}`} onChange=${(v) => v && save({ obligationsDate: v.slice(5, 10) })} /></${Field}>
     <${Field} label="Préparer la facture électronique : le"><${Input} type="date" value=${settings.eInvoiceDate || ''} onChange=${(v) => save({ eInvoiceDate: v || null })} /></${Field}>

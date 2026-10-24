@@ -29,9 +29,10 @@ export const DEFAULT_CONFIG = {
     { id: 'programme', label: 'Programme du mois (kit)', plan: 'confort', deliverables: ['Kit du mois de {mois1} (programme d’activités et matériel)'] },
     { id: 'newsletter', label: 'Newsletter', plan: 'confort', moteur: 'Moteur newsletter' },
     { id: 'visio', label: 'Visio de suivi mensuelle', plan: 'premium' },
-    { id: 'reunion', label: 'Réunion d’équipe et veille formations', plan: 'premium', deliverables: ['Ordre du jour de la réunion d’équipe de {mois1}', 'Formation du mois (veille formations)'] },
-    { id: 'echeances', label: 'Suivi des échéances (formations, PMI)', plan: 'premium', moteur: 'Moteur suivi des échéances', moteurActive: false },
     { id: 'evenements', label: 'Rappels d’événements', plan: 'premium', moteur: 'Moteur rappels événements' },
+    { id: 'echeances', label: 'Suivi des obligations (formations, sécurité, PMI, Caf)', plan: 'premium', moteur: 'Moteur obligations' },
+    { id: 'reunion', label: 'Réunion d’équipe (ordre du jour et compte rendu)', plan: 'premium', moteur: 'Moteur compte rendu des réunions', deliverables: ['Ordre du jour de la réunion d’équipe de {mois1}'] },
+    { id: 'formation', label: 'Idée de formation du mois', plan: 'premium', moteur: 'Moteur formation' },
   ],
 
   // Tâches mensuelles. service = null : pour toutes les clientes actives.
@@ -43,9 +44,12 @@ export const DEFAULT_CONFIG = {
     { id: 'newsletter-check', service: 'newsletter', day: 2, title: 'Vérifier que la newsletter de {creche} est bien partie aux familles' },
     { id: 'infos-recues', service: null, day: 5, title: 'Ai-je reçu les infos du mois de {creche} ?' },
     { id: 'programme', service: 'programme', day: 5, dueDay: 20, title: 'Préparer le programme de {mois1} de {creche} (kit du mois)' },
-    { id: 'reunion-prep', service: 'reunion', day: 5, dueDay: 25, title: 'Préparer l’ordre du jour de la réunion d’équipe de {mois1} et la formation du mois pour {creche}' },
+    { id: 'reunion-prep', service: 'reunion', day: 5, dueDay: 25, title: 'Préparer l’ordre du jour de la réunion d’équipe de {mois1} pour {creche}' },
     { id: 'moteurs', service: null, day: 7, title: 'Vérifier que les moteurs de {creche} ont bien tourné' },
-    { id: 'echeances-check', service: 'echeances', day: 7, title: 'Vérifier les alertes du suivi des échéances (formations, PMI) de {creche}' },
+    { id: 'echeances-check', service: 'echeances', day: 7, title: 'Vérifier les alertes du suivi des obligations de {creche} (formations, sécurité, PMI, Caf)' },
+    { id: 'qualite', service: null, day: 10, title: 'Contrôle qualité {creche} : relire 5 réponses automatiques aux familles et les mails transmis à la direction ; corriger le moteur si besoin' },
+    { id: 'formation-besoin', service: 'formation', day: 20, dueDay: 25, title: 'La directrice de {creche} a-t-elle signalé un besoin de formation ? Si oui, changer la ligne de {mois1} dans son tableau « Idées de formation » avant le 25' },
+    { id: 'newsletter-annee', service: 'newsletter', day: 1, months: [12], title: 'Remplir l’onglet Newsletter de {creche} pour les 12 mois de l’année suivante' },
     { id: 'newsletter-prep', service: 'newsletter', day: 20, dueDay: 24, title: 'Préparer la newsletter de {mois1} pour {creche} et déposer le lien dans son tableau' },
     { id: 'livraison', service: null, day: 29, title: 'Livrer le travail du mois à {creche}' },
   ],
@@ -54,6 +58,20 @@ export const DEFAULT_CONFIG = {
   // Mes tâches d'entrepreneuse
   myRules: [
     { id: 'zapier', day: 1, title: 'Vérifier mon abonnement Zapier et le nombre de tâches utilisées' },
+    { id: 'anthropic', day: 1, title: 'Vérifier mon crédit Anthropic (API)' },
+  ],
+  // Chaque jour du lundi au vendredi (une seule tâche pour toutes les clientes)
+  weekdayRules: [
+    { id: 'boite', title: 'Lire la boîte Serelys : alertes des moteurs et questions des directrices' },
+  ],
+  // Chaque année (MM-JJ)
+  yearlyRules: [
+    { id: 'revenus', date: '05-01', title: 'Déclarer mes revenus d’auto-entrepreneuse' },
+    { id: 'regles-obligations', date: '09-01', title: 'Revérifier les règles du tableau des obligations et mettre à jour les tableaux des crèches Premium' },
+    { id: 'idees-formation', date: '10-01', title: 'Revérifier les idées de formation et mettre à jour les tableaux des crèches Premium' },
+    { id: 'prix', date: '11-01', title: 'Décider si j’augmente mes prix (prévenir chaque crèche 2 mois avant)' },
+    { id: 'programme-annee', date: '12-01', title: 'Préparer le programme d’activités de l’année suivante' },
+    { id: 'cfe', date: '12-01', due: '12-15', title: 'Payer la CFE (avant le 15 décembre)' },
   ],
 
   oneshots: {
@@ -71,7 +89,8 @@ export const DEFAULT_CONFIG = {
 
   setupItems: [
     { id: 'tableaux', label: 'Créer ses tableaux dans son Drive (tableau de rappels, tableau des heures)' },
-    { id: 'tableau-echeances', label: 'Créer son tableau de suivi des échéances', service: 'echeances' },
+    { id: 'onglet-familles', label: 'Créer l’onglet « Familles »', minPlan: 'confort' },
+    { id: 'tableaux-premium', label: 'Créer l’onglet « Événements », le tableau des obligations et le tableau « Idées de formation »', minPlan: 'premium' },
     { id: 'moteurs', label: 'Copier et brancher ses moteurs : {moteurs}' },
     { id: 'filtre', label: 'Poser le filtre santé dans sa boîte' },
     { id: 'perso', label: 'Personnaliser (coordonnées, horaires, tarifs, signature, mention « assistant automatique »)' },
@@ -97,6 +116,7 @@ export const DEFAULT_SETTINGS = {
   rcProDate: null,              // date prévue « Souscrire mon assurance RC pro »
   aeTaskDate: null,             // date prévue « Créer mon auto-entreprise »
   obligationsDate: '01-15',     // MM-JJ : relecture annuelle de mes obligations
+  rcProRenewal: null,           // MM-JJ : date anniversaire de l'assurance RC pro
   eInvoiceDate: '2027-06-01',
   urssafPeriod: 'mensuel',      // ou 'trimestriel'
   urssafReminderDays: 5,
@@ -119,7 +139,7 @@ function deepMerge(base, over) {
 
 // Les règles/prestations sont des listes : les surcharges sont fusionnées par id.
 export function mergeConfig(over = {}) {
-  const c = deepMerge(DEFAULT_CONFIG, { ...over, rules: undefined, services: undefined, myRules: undefined });
+  const c = deepMerge(DEFAULT_CONFIG, { ...over, rules: undefined, services: undefined, myRules: undefined, weekdayRules: undefined, yearlyRules: undefined });
   const byId = (base, list) => {
     if (!Array.isArray(list)) return base;
     const map = new Map(base.map((x) => [x.id, x]));
@@ -129,6 +149,8 @@ export function mergeConfig(over = {}) {
   c.rules = byId(DEFAULT_CONFIG.rules, over.rules);
   c.services = byId(DEFAULT_CONFIG.services, over.services);
   c.myRules = byId(DEFAULT_CONFIG.myRules, over.myRules);
+  c.weekdayRules = byId(DEFAULT_CONFIG.weekdayRules, over.weekdayRules);
+  c.yearlyRules = byId(DEFAULT_CONFIG.yearlyRules, over.yearlyRules);
   return c;
 }
 

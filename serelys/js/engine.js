@@ -5,7 +5,7 @@
 
 import {
   addDays, addMonths, addMonthsYm, dateIn, day, dayOfMonth, daysInMonth, diffDays, firstOf, fmtDate,
-  fmtShort, isDate, lastOf, maxD, minD, mondayOf, monthLabel, monthName, monthsBetween, timeOf, ym,
+  fmtShort, isDate, lastOf, maxD, minD, mondayOf, weekday, monthLabel, monthName, monthsBetween, timeOf, ym,
 } from './dates.js';
 import { mergeConfig, mergeSettings } from './catalog.js';
 
@@ -292,7 +292,8 @@ function onboardingTasks(c, ctx) {
     }
     const svc = new Set(clientServices(c, config, d.serviceStart || s).map((x) => x.id));
     const moteurs = clientMoteurs(c, config, d.serviceStart || s).join(', ');
-    const items = config.setupItems.filter((i) => !i.service || svc.has(i.service)).map((i) => ({ id: i.id, label: fill(i.label, { moteurs }) }));
+    const rank = config.plans[c.plan]?.rank || 1;
+    const items = config.setupItems.filter((i) => (!i.service || svc.has(i.service)) && (!i.minPlan || rank >= (config.plans[i.minPlan]?.rank || 1))).map((i) => ({ id: i.id, label: fill(i.label, { moteurs }) }));
     add({ key: k('setup'), date: addDays(s, 1), due: d.serviceStart && d.serviceStart > s ? addDays(d.serviceStart, -1) : null,
       title: `Mettre en place ${n}`, items, step: true, blocked: allDocs ? null : 'Tant qu’il manque un des 4 éléments, je n’allume aucun moteur.', softBlock: true });
   }
@@ -321,6 +322,7 @@ function monthlyTasks(c, ctx, fromYm, toYm) {
       if (r.disabled) continue;
       if (r.service && !svc.has(r.service)) continue;
       if (r.id === 'facture') continue; // à part, liée aux factures
+      if (r.months && !r.months.includes(Number(m.slice(5, 7)))) continue;
       const date = dateIn(m, r.day);
       if (date < start || (d.end && date > d.end)) continue;
       const key = `c:${c.id}:${r.id}:${m}`;
@@ -358,7 +360,9 @@ function monthlyTasks(c, ctx, fromYm, toYm) {
     }
     if (svc.has('reunion') && isDate(c.reunions?.[m])) {
       const r = day(c.reunions[m]);
-      out.push(makeTask({ key: `c:${c.id}:cr:${m}`, clientId: c.id, date: addDays(r, 2), title: `Compte rendu de la réunion de ${c.name} (à partir des notes de la directrice)`, month: m }));
+      out.push(makeTask({ key: `c:${c.id}:cr:${m}`, clientId: c.id, date: addDays(r, 2), title: `Compte rendu de la réunion de ${c.name} : notes reçues ? brouillon relu et envoyé ?`, month: m,
+        items: [{ id: 'notes', label: 'Notes de la directrice reçues (sinon, la relancer)' }, { id: 'envoye', label: 'Brouillon du moteur relu et envoyé' }],
+        note: ['Le moteur prépare le brouillon tout seul quand la directrice envoie ses notes. Si rien n’est arrivé, je la relance.'] }));
     }
   }
   return out;
@@ -422,6 +426,21 @@ function myTasks(ctx, invoices, fromYm, toYm) {
       if (r.disabled) continue;
       add({ key: `e:${r.id}:${m}`, date: dateIn(m, r.day), title: fill(r.title, { mois: monthName(m) }) });
     }
+  }
+  for (const r of config.weekdayRules || []) {
+    if (r.disabled) continue;
+    for (let d = firstOf(fromYm); d <= lastOf(toYm); d = addDays(d, 1)) {
+      const wd = weekday(d);
+      if (wd >= 1 && wd <= 5) add({ key: `e:${r.id}:${d}`, date: d, title: r.title, daily: true });
+    }
+  }
+  const allYears = [...new Set(monthsBetween(fromYm, toYm).map((m) => m.slice(0, 4)))];
+  for (const y of allYears) {
+    for (const r of config.yearlyRules || []) {
+      if (r.disabled) continue;
+      add({ key: `e:${r.id}:${y}`, date: `${y}-${r.date}`, due: r.due ? `${y}-${r.due}` : null, title: r.title });
+    }
+    if (settings.rcProRenewal) add({ key: `e:rcpro-renouvellement:${y}`, date: `${y}-${settings.rcProRenewal}`, title: 'Renouveler mon assurance RC pro (date anniversaire)' });
   }
   // Déclaration Urssaf
   const aeStart = settings.aeCreationDate ? day(settings.aeCreationDate) : null;
@@ -507,6 +526,7 @@ export function computeAll(state, today, { monthsAhead = 3 } = {}) {
     t.doneAt = st.doneAt || null;
     t.end = t.due || t.date;
     t.late = !t.done && t.end < today;
+    if (t.daily && !t.done && t.date < today) t.hidden = true;
     t.today = !t.done && (t.date === today || t.due === today);
     t.ongoing = !t.done && t.date < today && t.due && t.due > today;
     if (t.clientId) t.client = ctx.byId[t.clientId];
@@ -535,7 +555,7 @@ export function todayView(all, today) {
     late: open.filter((t) => t.late),
     today: open.filter((t) => !t.late && (t.date === today || t.due === today)),
     ongoing: open.filter((t) => t.ongoing),
-    week: open.filter((t) => t.date > today && t.date <= weekEnd),
+    week: open.filter((t) => t.date > today && t.date <= weekEnd && !t.daily),
     doneToday: all.tasks.filter((t) => t.done && t.doneAt && day(t.doneAt) === today),
   };
 }
@@ -609,7 +629,7 @@ export function buildNotification(state, today, kind) {
   }
   if (kind === 'weekly') {
     const end = addDays(today, 6);
-    const week = all.tasks.filter((t) => !t.done && !t.hidden && t.date >= today && t.date <= end);
+    const week = all.tasks.filter((t) => !t.done && !t.hidden && !t.daily && t.date >= today && t.date <= end);
     const visios = week.filter((t) => t.kind === 'event');
     const inv = all.invoices.filter((i) => i.status === 'a_envoyer' && i.date >= today && i.date <= end);
     const parts = [`Cette semaine : ${plural(week.length, 'tâche')}`];
