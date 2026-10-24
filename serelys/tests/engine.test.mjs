@@ -86,7 +86,8 @@ test('Premium filleule : 990 − 50 sur la 1re facture, tâches Premium', () => 
   assert.equal(find(all, 'c:C:visio-proposer:2026-11').done, true, 'date de visio saisie');
   assert.equal(find(all, 'c:C:visio-proposer:2026-12').done, false);
   assert.equal(find(all, 'c:C:echeances-check:2026-12').date, '2026-12-07');
-  assert.equal(find(all, 'c:C:moteurs:2026-11').items.length, 8, 'mêmes + newsletter + événements (suivi des échéances pas encore actif)');
+  assert.deepEqual(find(all, 'c:C:moteurs:2026-11').items.map((i) => i.label).slice(6),
+    ['Moteur newsletter', 'Moteur rappels événements', 'Moteur obligations', 'Moteur compte rendu des réunions', 'Moteur formation']);
   const os = find(all, 'c:C:ob:oneshots');
   assert.ok(!os.items.some((i) => i.id === 'filleule'), 'Premium : remise de 50 € à la place');
   assert.equal(os.items.length, 8, '8 documents uniques en Premium');
@@ -240,4 +241,49 @@ test('Dates en français', () => {
   assert.equal(fmtDate('2026-11-03'), 'mardi 3 novembre');
   assert.equal(fmtDate('2026-11-01'), 'dimanche 1er novembre');
   assert.equal(fmtDate('2026-11-12T14:00'), 'jeudi 12 novembre à 14 h');
+});
+
+test('Mise à jour des règles (moteurs, compte rendu, obligations, formation, rappels)', () => {
+  const all = computeAll(baseState(), TODAY, { monthsAhead: 3 });
+  // 2. Compte rendu
+  const cr = find(all, 'c:C:cr:2026-11');
+  assert.equal(cr.date, '2026-11-20');
+  assert.match(cr.title, /notes reçues \? brouillon relu et envoyé \?$/);
+  assert.equal(cr.items.length, 2);
+  // 3. Obligations
+  assert.match(find(all, 'c:C:echeances-check:2026-11').title, /suivi des obligations de Crèche Test Premium \(formations, sécurité, PMI, Caf\)/);
+  // 5. Formation
+  assert.equal(find(all, 'c:C:reunion-prep:2026-11').title, 'Préparer l’ordre du jour de la réunion d’équipe de décembre pour Crèche Test Premium');
+  const fb = find(all, 'c:C:formation-besoin:2026-11');
+  assert.equal(fb.date, '2026-11-20'); assert.equal(fb.due, '2026-11-25');
+  assert.match(fb.title, /ligne de décembre dans son tableau « Idées de formation »/);
+  assert.equal(find(all, 'c:B:formation-besoin:2026-11'), undefined, 'Premium seulement');
+  assert.ok(!find(all, 'c:C:livraison:2026-11').items.some((i) => /formation/i.test(i.label)), 'l’idée de formation part toute seule le 28');
+  assert.ok(!all.tasks.some((t) => /veille/i.test(t.title + JSON.stringify(t.items || []))), 'plus de « veille formations »');
+  // 4. Tableaux de la mise en place
+  const setup = (id) => find(all, `c:${id}:ob:setup`).items.map((i) => i.id);
+  assert.ok(!setup('A').includes('onglet-familles') && !setup('A').includes('tableaux-premium'));
+  assert.ok(setup('B').includes('onglet-familles') && !setup('B').includes('tableaux-premium'));
+  assert.ok(setup('C').includes('onglet-familles') && setup('C').includes('tableaux-premium'));
+  // 6. Nouveaux rappels
+  assert.equal(find(all, 'c:A:qualite:2026-11').date, '2026-11-10');
+  assert.equal(find(all, 'c:B:newsletter-annee:2026-12').date, '2026-12-01');
+  assert.equal(find(all, 'c:A:newsletter-annee:2026-12'), undefined, 'Confort et Premium seulement');
+  assert.equal(find(all, 'c:B:newsletter-annee:2026-11'), undefined, 'seulement en décembre');
+  assert.ok(find(all, 'e:anthropic:2026-11'));
+  assert.ok(find(all, 'e:boite:2026-10-19') && find(all, 'e:boite:2026-10-23'));
+  assert.equal(find(all, 'e:boite:2026-10-24'), undefined, 'pas le samedi');
+  const cfe = find(all, 'e:cfe:2026'); assert.equal(cfe.date, '2026-12-01'); assert.equal(cfe.due, '2026-12-15');
+  assert.ok(find(all, 'e:prix:2026') && find(all, 'e:programme-annee:2026'));
+  const y = computeAll({ ...baseState(), settings: { ...baseState().settings, rcProRenewal: '03-15' } }, '2027-01-10', { monthsAhead: 9 });
+  assert.equal(find(y, 'e:revenus:2027').date, '2027-05-01');
+  assert.equal(find(y, 'e:regles-obligations:2027').date, '2027-09-01');
+  assert.equal(find(y, 'e:idees-formation:2027').date, '2027-10-01');
+  assert.equal(find(y, 'e:rcpro-renouvellement:2027').date, '2027-03-15');
+  // La lecture de la boîte d'un jour passé ne s'accumule pas en retard
+  const later = computeAll(baseState(), '2026-10-22', { monthsAhead: 1 });
+  const v = todayView(later, '2026-10-22');
+  assert.ok(v.today.some((t) => t.key === 'e:boite:2026-10-22'));
+  assert.ok(!v.late.some((t) => t.daily));
+  assert.ok(!v.week.some((t) => t.daily));
 });
