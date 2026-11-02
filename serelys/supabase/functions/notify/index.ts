@@ -60,6 +60,7 @@ async function loadItems(userId: string) {
     state: {
       clients: vals('client'), prospects: vals('prospect'), manualTasks: vals('manual'),
       taskState: items.task || {}, invoiceState: items.invoice || {}, settings: items.settings?.main || {},
+      launch: vals('launch'),
     },
   };
 }
@@ -101,7 +102,7 @@ async function runForUser(userId: string, nowDate = new Date()) {
   const report: string[] = [];
 
   for (const slot of dueSlots(now, settings.notifTimes, log)) {
-    const n = buildNotification(state, now.date, slot.kind);
+    const n = buildNotification(state, now.date, slot.kind, { weekly: !!slot.weekly });
     if (n) { const r = await sendTo(userId, items, { ...n, url: './' }); report.push(`${slot.logKey}: ${r.sent}`); }
     else report.push(`${slot.logKey}: rien à rappeler`);
     log = markSent(log, now, [slot.logKey]);
@@ -109,8 +110,7 @@ async function runForUser(userId: string, nowDate = new Date()) {
   const events = upcomingEvents(state, now.date, now.time, plusMinutes(now.time, 61));
   const due = dueEvents(now, events, log);
   for (const e of due) {
-    const who = e.client?.name ? ` avec ${e.client.name}` : '';
-    await sendTo(userId, items, { title: `Dans 1 h : ${e.time.replace(':', ' h ')}`, body: e.title + (e.title.includes(who) ? '' : who), tag: `event-${e.key}` });
+    await sendTo(userId, items, { title: `Dans 1 h, à ${e.time.replace(':', ' h ')}`, body: e.title, tag: `event-${e.key}` });
     report.push(`visio ${e.key}`);
   }
   if (due.length) log = markEvents(log, now, due.map((e: any) => e.key));

@@ -14,8 +14,16 @@ export const STAGES = {
 };
 export const INVOICE_STATUS = { a_envoyer: 'À envoyer', envoyee: 'Envoyée', payee: 'Payée' };
 export const PROSPECT_STAGES = {
-  a_contacter: 'À contacter', contactee: 'Contactée', visio: 'Visio découverte', devis: 'Devis envoyé', signee: 'Signée', non: 'Pas intéressée',
+  a_contacter: 'À contacter', contactee: 'Contactée', visio: 'Visio prévue', devis: 'Devis envoyé', cliente: 'Cliente', non: 'Pas intéressée',
 };
+export const PRIORITIES = { haute: 'Haute', moyenne: 'Moyenne', basse: 'Basse' };
+
+// « Les Lucioles » → « la crèche Les Lucioles » ; « Crèche Les Lucioles » → « la crèche Les Lucioles »
+export function crecheName(name = '') {
+  const n = String(name).trim();
+  const m = n.match(/^(?:(?:la|une)\s+)?((?:micro-)?crèches?)\s+(.+)$/i);
+  return m ? `la ${m[1].toLowerCase()} ${m[2]}` : `la crèche ${n}`;
+}
 
 const euro = (n) => `${(Math.round(n * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 })} €`;
 export { euro };
@@ -30,8 +38,13 @@ export function makeContext(state, today) {
   const config = mergeConfig(state.settings?.config);
   const settings = mergeSettings(state.settings);
   const clients = (state.clients || []).filter((c) => !c.deleted);
+  const launch = launchSteps(state, config);
+  // Mode « clientes actives » dès qu'une cliente réelle (pas test) n'est pas encore partie.
+  const realActive = clients.filter((c) => !c.test && clientStage(c, today) !== 'ancienne');
   return {
-    config, settings, today, clients,
+    config, settings, today, clients, launch, realActive,
+    mode: realActive.length ? 'clientes' : 'lancement',
+    entrepriseCreated: !!settings.aeCreated || launch.some((x) => x.id === 'entreprise' && x.done),
     byId: Object.fromEntries(clients.map((c) => [c.id, c])),
     taskState: state.taskState || {},
     invoiceState: state.invoiceState || {},
@@ -39,6 +52,14 @@ export function makeContext(state, today) {
     manualTasks: (state.manualTasks || []).filter((t) => !t.deleted),
   };
 }
+
+// Étapes de la checklist de lancement (celles de la base, sinon celles de départ), dans l'ordre.
+export function launchSteps(state, config = mergeConfig(state.settings?.config)) {
+  const saved = (state.launch || []).filter((x) => !x.deleted);
+  const list = saved.length || state.settings?.launchSeeded ? saved : config.launchSteps.map((x, i) => ({ ...x, order: i + 1 }));
+  return [...list].sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+}
+export const currentLaunchStep = (steps) => steps.find((x) => !x.done) || null;
 
 // ---------------------------------------------------------------- Dates d'une cliente
 
@@ -142,7 +163,7 @@ export function computeInvoices(ctx, toYm) {
         discounts.push({ label: 'Parrainage : remise filleule', amount: config.filleulePremiumDiscount, kind: 'filleule' });
       }
       first = false;
-      all.push({ key, clientId: c.id, month: m, date, lines, prorata, discounts, isFirst,
+      all.push({ key, clientId: c.id, test: !!c.test, month: m, date, lines, prorata, discounts, isFirst,
         status: st.status || 'a_envoyer', sentAt: st.sentAt || null, paidAt: st.paidAt || null, frozen: st.status && st.status !== 'a_envoyer' ? st : null });
     }
   }
@@ -257,16 +278,16 @@ export { STYLES };
 
 function onboardingTasks(c, ctx) {
   const { config, settings } = ctx;
-  const n = c.name;
+  const n = crecheName(c.name);
   const out = [];
   const d = clientDates(c);
   const k = (s) => `c:${c.id}:ob:${s}`;
   const add = (t) => out.push(makeTask({ clientId: c.id, onboarding: true, ...t }));
   const disc = isDate(c.discoveryDate) ? day(c.discoveryDate) : null;
   if (disc) {
-    add({ key: k('visio'), date: disc, time: timeOf(c.discoveryDate), kind: 'event', title: `Visio découverte avec ${n}`, step: false });
-    add({ key: k('pdf'), date: disc, title: `Envoyer les forfaits détaillés en PDF à ${n}`, step: true });
-    add({ key: k('source'), date: disc, title: `Noter comment ${n} a connu Serelys (et sa crèche marraine)`, step: true, autoDone: !!c.howKnown });
+    add({ key: k('visio'), date: disc, time: timeOf(c.discoveryDate), kind: 'event', title: `Faire la visio découverte avec ${n}`, step: false });
+    add({ key: k('pdf'), date: disc, title: `Envoyer les forfaits en PDF à ${n}`, step: true });
+    add({ key: k('source'), date: disc, title: `Noter comment ${n} a connu Serelys`, note: ['Et le nom de sa crèche marraine, s’il y en a une.'], step: true, autoDone: !!c.howKnown });
     add({ key: k('devis'), date: addDays(disc, 1), title: `Envoyer le devis à ${n}`, step: true, note: quoteSummary(c, ctx),
       autoDone: !!(c.quoteSentDate || c.quoteAccepted),
       blocked: settings.aeCreated ? null : 'Pas de devis avant d’avoir mon SIRET : coche d’abord « Auto-entreprise créée » dans Réglages.' });
@@ -275,19 +296,19 @@ function onboardingTasks(c, ctx) {
     add({ key: k('planif'), date: day(c.quoteAccepted), title: `Planifier la visio de signature avec ${n}`, step: true, autoDone: isDate(c.signatureVisioDate) });
   }
   if (isDate(c.signatureVisioDate)) {
-    add({ key: k('signature'), date: day(c.signatureVisioDate), time: timeOf(c.signatureVisioDate), kind: 'event', title: `Visio de signature avec ${n}` });
-    add({ key: k('mail'), date: day(c.signatureVisioDate), title: `Envoyer à ${n} un seul mail avec : contrat + Annexes 1 et 2 signés par moi, fiche d’infos, note aux familles, modèles de mails`, step: true });
+    add({ key: k('signature'), date: day(c.signatureVisioDate), time: timeOf(c.signatureVisioDate), kind: 'event', title: `Faire la visio de signature avec ${n}` });
+    add({ key: k('mail'), date: day(c.signatureVisioDate), title: `Envoyer le contrat et les documents à ${n}`, note: ['Un seul mail : contrat + Annexes 1 et 2 signés par moi, fiche d’infos, note aux familles, modèles de mails.'], step: true });
   }
   if (isDate(c.contractSignedDate)) {
     const s = day(c.contractSignedDate);
     add({ key: k('registre'), date: s, title: `Ajouter ${n} à mon registre des traitements`, step: true });
-    const docs = makeTask({ key: k('docs'), clientId: c.id, onboarding: true, step: true, date: s, title: `Recevoir de ${n} les 4 éléments avant de démarrer`,
+    const docs = makeTask({ key: k('docs'), clientId: c.id, onboarding: true, step: true, date: s, title: `Récupérer les 4 documents de ${n}`,
       items: config.docsToReceive, warning: 'Tant qu’il en manque une, je n’allume aucun moteur.' });
     out.push(docs);
     const docsState = ctx.taskState[docs.key];
     const allDocs = docsState?.done || config.docsToReceive.every((i) => docsState?.items?.[i.id]);
     if (!allDocs) {
-      add({ key: k('docs-rappel'), stateKey: k('docs'), date: addDays(s, 7), title: `Il manque encore des éléments de ${n} pour démarrer`,
+      add({ key: k('docs-rappel'), stateKey: k('docs'), date: addDays(s, 7), title: `Relancer ${n} pour les documents manquants`,
         items: config.docsToReceive, warning: 'Tant qu’il en manque une, je n’allume aucun moteur.', reminder: true });
     }
     const svc = new Set(clientServices(c, config, d.serviceStart || s).map((x) => x.id));
@@ -299,9 +320,9 @@ function onboardingTasks(c, ctx) {
   }
   if (d.paidStart && isDate(c.contractSignedDate)) {
     if (c.style === 'perso') {
-      add({ key: k('apercu'), date: d.paidStart, title: `Envoyer à ${n} l’aperçu de son style personnalisé (puis jusqu’à 2 séries d’ajustements)`, step: true });
+      add({ key: k('apercu'), date: d.paidStart, title: `Envoyer l’aperçu de son style à ${n}`, note: ['Puis jusqu’à 2 séries d’ajustements.'], step: true });
     }
-    add({ key: k('oneshots'), date: d.paidStart, title: `Livrer les documents uniques de ${n} (style ${STYLES[c.style] || 'classique'})`, items: oneshotItems(c, ctx), step: true });
+    add({ key: k('oneshots'), date: d.paidStart, title: `Livrer les documents de départ à ${n}`, note: [`Style ${STYLES[c.style] || 'classique'}.`], items: oneshotItems(c, ctx), step: true });
   }
   return out;
 }
@@ -315,7 +336,7 @@ function monthlyTasks(c, ctx, fromYm, toYm) {
   const months = monthsBetween(maxD(ym(start), fromYm), d.end ? minD(toYm, ym(d.end)) : toYm);
   const invoiceDates = new Set();
   for (const m of months) {
-    const vars = { creche: c.name, mois: monthName(m), mois1: monthName(addMonthsYm(m, 1)) };
+    const vars = { creche: crecheName(c.name), mois: monthName(m), mois1: monthName(addMonthsYm(m, 1)) };
     const ref = dateIn(m, 15);
     const svc = new Set(clientServices(c, config, ref).map((s) => s.id));
     for (const r of config.rules) {
@@ -326,7 +347,8 @@ function monthlyTasks(c, ctx, fromYm, toYm) {
       const date = dateIn(m, r.day);
       if (date < start || (d.end && date > d.end)) continue;
       const key = `c:${c.id}:${r.id}:${m}`;
-      const t = makeTask({ key, clientId: c.id, date, due: r.dueDay ? dateIn(m, r.dueDay) : null, title: fill(r.title, vars), rule: r.id, month: m });
+      const t = makeTask({ key, clientId: c.id, date, due: r.dueDay ? dateIn(m, r.dueDay) : null, title: fill(r.title, vars), rule: r.id, month: m,
+        note: r.note ? [fill(r.note, vars)] : null });
       if (r.id === 'moteurs') t.items = clientMoteurs(c, config, date).map((x, i) => ({ id: `m${i}`, label: x }));
       if (r.id === 'livraison') {
         const list = [...config.baseDeliverables];
@@ -345,10 +367,10 @@ function monthlyTasks(c, ctx, fromYm, toYm) {
         if (st?.answer === 'non') {
           const ad = st.answeredAt ? day(st.answeredAt) : date;
           const rk = `${key}:relance`;
-          out.push(makeTask({ key: rk, clientId: c.id, date: ad, title: `Relancer ${c.name} pour ses infos du mois`, month: m }));
+          out.push(makeTask({ key: rk, clientId: c.id, date: ad, title: `Relancer ${crecheName(c.name)} pour ses infos du mois`, month: m }));
           const r7 = dateIn(m, 7);
           if (!ctx.taskState[rk]?.done && r7 > ad) {
-            out.push(makeTask({ key: `${key}:relance7`, stateKey: rk, clientId: c.id, date: r7, reminder: true, title: `Toujours pas d’infos du mois de ${c.name} : la relancer`, month: m }));
+            out.push(makeTask({ key: `${key}:relance7`, stateKey: rk, clientId: c.id, date: r7, reminder: true, title: `Relancer encore ${crecheName(c.name)} pour ses infos du mois`, month: m }));
           }
         }
       }
@@ -356,11 +378,11 @@ function monthlyTasks(c, ctx, fromYm, toYm) {
     }
     if (svc.has('visio') && isDate(c.visios?.[m])) {
       const v = c.visios[m];
-      out.push(makeTask({ key: `c:${c.id}:visio:${m}`, clientId: c.id, date: day(v), time: timeOf(v), kind: 'event', title: `Visio de suivi (30 min) avec ${c.name}`, remindBefore: 60, month: m }));
+      out.push(makeTask({ key: `c:${c.id}:visio:${m}`, clientId: c.id, date: day(v), time: timeOf(v), kind: 'event', title: `Faire la visio de suivi avec ${crecheName(c.name)}`, note: ['30 minutes.'], remindBefore: 60, month: m }));
     }
     if (svc.has('reunion') && isDate(c.reunions?.[m])) {
       const r = day(c.reunions[m]);
-      out.push(makeTask({ key: `c:${c.id}:cr:${m}`, clientId: c.id, date: addDays(r, 2), title: `Compte rendu de la réunion de ${c.name} : notes reçues ? brouillon relu et envoyé ?`, month: m,
+      out.push(makeTask({ key: `c:${c.id}:cr:${m}`, clientId: c.id, date: addDays(r, 2), title: `Envoyer le compte rendu de réunion à ${crecheName(c.name)}`, month: m,
         items: [{ id: 'notes', label: 'Notes de la directrice reçues (sinon, la relancer)' }, { id: 'envoye', label: 'Brouillon du moteur relu et envoyé' }],
         note: ['Le moteur prépare le brouillon tout seul quand la directrice envoie ses notes. Si rien n’est arrivé, je la relance.'] }));
     }
@@ -372,14 +394,14 @@ function invoiceTasks(invoices, ctx) {
   const out = [];
   for (const inv of invoices) {
     const c = ctx.byId[inv.clientId];
-    const n = c.name;
+    const n = crecheName(c.name);
     out.push(makeTask({ key: `c:${c.id}:facture:${inv.month}`, clientId: c.id, date: inv.date, invoiceKey: inv.key, kind: 'invoice',
-      title: `Envoyer la facture de ${n} (${euro(inv.amount)})`, autoDone: inv.status !== 'a_envoyer', note: invoiceNote(inv, ctx) }));
+      title: `Envoyer la facture à ${n} (${euro(inv.amount)})`, autoDone: inv.status !== 'a_envoyer', note: invoiceNote(inv, ctx) }));
     if (inv.status === 'envoyee') {
       out.push(makeTask({ key: `${inv.key}:rappel`, clientId: c.id, date: inv.due, invoiceKey: inv.key,
-        title: `Rappel gentil à ${n} pour sa facture de ${monthName(inv.month)} (${euro(inv.amount)})` }));
+        title: `Relancer gentiment ${n} pour sa facture de ${monthName(inv.month)}`, note: [`${euro(inv.amount)}, à payer avant le ${fmtShort(inv.due)}.`] }));
       out.push(makeTask({ key: `${inv.key}:retard`, clientId: c.id, date: addDays(inv.due, ctx.config.lateDays), invoiceKey: inv.key, alert: true,
-        title: `Facture de ${n} en retard de ${ctx.config.lateDays} jours : je peux suspendre le service (contrat, article 12)` }));
+        title: `Décider si je suspends le service de ${n}`, note: [`Sa facture de ${monthName(inv.month)} a ${ctx.config.lateDays} jours de retard (contrat, article 12).`] }));
     }
   }
   return out;
@@ -397,22 +419,22 @@ function dateLinkedTasks(c, ctx) {
   const { config } = ctx;
   const d = clientDates(c);
   const out = [];
-  const n = c.name;
+  const n = crecheName(c.name);
   if (d.offert && (!d.end || d.end >= addDays(day(d.offert.end), -5))) {
-    out.push(makeTask({ key: `c:${c.id}:offert-fin`, clientId: c.id, date: addDays(day(d.offert.end), -5), title: `Demander à ${n} si elle continue après son mois offert (fin le ${fmtShort(d.offert.end)})` }));
+    out.push(makeTask({ key: `c:${c.id}:offert-fin`, clientId: c.id, date: addDays(day(d.offert.end), -5), title: `Demander à ${n} si elle continue après le mois offert`, note: [`Fin du mois offert : ${fmtDate(d.offert.end)}.`] }));
   }
   for (const a of c.addons || []) {
     if (!isDate(a.trialEnd)) continue;
     const s = config.services.find((x) => x.id === a.service);
     out.push(makeTask({ key: `c:${c.id}:essai:${a.service}`, clientId: c.id, date: addDays(day(a.trialEnd), -5),
-      title: `Demander à ${n} si elle garde « ${s?.label || a.service} » (+${config.addonPrice} €/mois)` }));
+      title: `Demander à ${n} si elle garde « ${s?.label || a.service} »`, note: [`+${config.addonPrice} € par mois après l’essai.`] }));
   }
   if (d.serviceStart) {
     const p = addDays(addMonths(d.serviceStart, 2), -1);
-    if (!d.end || p <= d.end) out.push(makeTask({ key: `c:${c.id}:parrainage`, clientId: c.id, date: p, title: `Parler du parrainage à ${n} et lui donner la fiche parrainage` }));
+    if (!d.end || p <= d.end) out.push(makeTask({ key: `c:${c.id}:parrainage`, clientId: c.id, date: p, title: `Présenter le parrainage à ${n}`, note: ['Lui donner la fiche parrainage.'] }));
   }
   if (d.end) {
-    out.push(makeTask({ key: `c:${c.id}:cloture`, clientId: c.id, date: addDays(d.end, 1), due: addDays(d.end, 30), title: `Clôturer le dossier de ${n} (fin le ${fmtShort(d.end)})`, items: config.closingItems }));
+    out.push(makeTask({ key: `c:${c.id}:cloture`, clientId: c.id, date: addDays(d.end, 1), due: addDays(d.end, 30), title: `Clôturer le dossier de ${n}`, note: [`Fin du contrat : ${fmtDate(d.end)}.`], items: config.closingItems }));
   }
   return out;
 }
@@ -424,45 +446,45 @@ function myTasks(ctx, invoices, fromYm, toYm) {
   for (const m of monthsBetween(fromYm, toYm)) {
     for (const r of config.myRules) {
       if (r.disabled) continue;
-      add({ key: `e:${r.id}:${m}`, date: dateIn(m, r.day), title: fill(r.title, { mois: monthName(m) }) });
+      add({ key: `e:${r.id}:${m}`, date: dateIn(m, r.day), title: fill(r.title, { mois: monthName(m) }), note: r.note ? [r.note] : null, legal: !!r.legal });
     }
   }
   for (const r of config.weekdayRules || []) {
-    if (r.disabled) continue;
+    if (r.disabled || (r.clientsOnly && ctx.mode !== 'clientes')) continue;
     for (let d = firstOf(fromYm); d <= lastOf(toYm); d = addDays(d, 1)) {
       const wd = weekday(d);
-      if (wd >= 1 && wd <= 5) add({ key: `e:${r.id}:${d}`, date: d, title: r.title, daily: true });
+      if (wd >= 1 && wd <= 5) add({ key: `e:${r.id}:${d}`, date: d, title: r.title, note: r.note ? [r.note] : null, daily: true });
     }
   }
   const allYears = [...new Set(monthsBetween(fromYm, toYm).map((m) => m.slice(0, 4)))];
   for (const y of allYears) {
     for (const r of config.yearlyRules || []) {
       if (r.disabled) continue;
-      add({ key: `e:${r.id}:${y}`, date: `${y}-${r.date}`, due: r.due ? `${y}-${r.due}` : null, title: r.title });
+      add({ key: `e:${r.id}:${y}`, date: `${y}-${r.date}`, due: r.due ? `${y}-${r.due}` : null, title: r.title, note: r.note ? [r.note] : null, legal: !!r.legal });
     }
-    if (settings.rcProRenewal) add({ key: `e:rcpro-renouvellement:${y}`, date: `${y}-${settings.rcProRenewal}`, title: 'Renouveler mon assurance RC pro (date anniversaire)' });
+    if (settings.rcProRenewal) add({ key: `e:rcpro-renouvellement:${y}`, date: `${y}-${settings.rcProRenewal}`, title: 'Renouveler mon assurance RC pro', note: ['C’est sa date anniversaire.'], legal: true });
   }
   // Déclaration Urssaf
   const aeStart = settings.aeCreationDate ? day(settings.aeCreationDate) : null;
   for (const p of aeStart ? urssafPeriods(settings, addMonthsYm(fromYm, -3), toYm) : []) {
     if (p.end < aeStart) continue;
     const amount = encaisse(invoices, p.start, p.end);
-    add({ key: `e:urssaf:${p.id}`, date: addDays(p.deadline, -settings.urssafReminderDays), due: p.deadline, kind: 'urssaf',
-      title: `Déclarer mon chiffre d’affaires ${p.label} à l’Urssaf : ${euro(amount)} encaissés (avant le ${fmtShort(p.deadline)})` });
+    add({ key: `e:urssaf:${p.id}`, date: addDays(p.deadline, -settings.urssafReminderDays), due: p.deadline, kind: 'urssaf', legal: true,
+      title: `Déclarer mon chiffre d’affaires ${p.label} à l’Urssaf`, note: [`${euro(amount)} encaissés. Avant le ${fmtDate(p.deadline)}.`] });
   }
   const years = [...new Set(monthsBetween(fromYm, toYm).map((m) => m.slice(0, 4)))];
   for (const y of years) {
-    add({ key: `e:obligations:${y}`, date: `${y}-${settings.obligationsDate}`, title: 'Relire mes obligations d’entrepreneuse (les règles changent)' });
+    add({ key: `e:obligations:${y}`, date: `${y}-${settings.obligationsDate}`, title: 'Relire mes obligations d’entrepreneuse', note: ['Les règles changent chaque année.'] });
   }
-  if (settings.rcProDate) add({ key: 'e:rcpro', date: day(settings.rcProDate), title: 'Souscrire mon assurance responsabilité civile pro (avant la première signature)' });
-  if (settings.aeTaskDate) add({ key: 'e:creation-ae', date: day(settings.aeTaskDate), title: 'Créer mon auto-entreprise (pas de devis ni de facture sans SIRET)', autoDone: !!settings.aeCreated });
+  if (settings.rcProDate) add({ key: 'e:rcpro', date: day(settings.rcProDate), title: 'Souscrire mon assurance RC pro', note: ['Avant la première signature.'] });
+  if (settings.aeTaskDate) add({ key: 'e:creation-ae', date: day(settings.aeTaskDate), title: 'Créer mon auto-entreprise', note: ['Pas de devis ni de facture sans SIRET.'], autoDone: !!settings.aeCreated });
   if (aeStart && !settings.acreDone) {
     for (const j of [7, 30, 50]) {
-      add({ key: `e:acre:${j}`, stateKey: 'e:acre', date: addDays(aeStart, j), due: addDays(aeStart, 60), reminder: j > 7,
-        title: `Demander l’ACRE à l’Urssaf (au plus tard le ${fmtShort(addDays(aeStart, 60))})` });
+      add({ key: `e:acre:${j}`, stateKey: 'e:acre', date: addDays(aeStart, j), due: addDays(aeStart, 60), reminder: j > 7, legal: true,
+        title: 'Demander l’ACRE à l’Urssaf', note: [`Au plus tard le ${fmtDate(addDays(aeStart, 60))}.`] });
     }
   }
-  if (settings.eInvoiceDate) add({ key: 'e:facture-electronique', date: day(settings.eInvoiceDate), title: 'Préparer la facture électronique (obligatoire pour émettre à partir du 1er septembre 2027)' });
+  if (settings.eInvoiceDate) add({ key: 'e:facture-electronique', date: day(settings.eInvoiceDate), title: 'Préparer la facture électronique', note: ['Obligatoire pour émettre des factures à partir du 1er septembre 2027.'], legal: true });
   return out;
 }
 
@@ -483,17 +505,20 @@ export function urssafPeriods(settings, fromYm, toYm) {
 }
 
 export function encaisse(invoices, from, to) {
-  return invoices.filter((i) => i.status === 'payee' && i.paidAt && day(i.paidAt) >= from && day(i.paidAt) <= to).reduce((s, i) => s + i.amount, 0);
+  return invoices.filter((i) => !i.test && i.status === 'payee' && i.paidAt && day(i.paidAt) >= from && day(i.paidAt) <= to).reduce((s, i) => s + i.amount, 0);
 }
 
+// Relance proposée quand une crèche est « Contactée » depuis 7 jours sans changement (une seule relance).
 function prospectTasks(ctx) {
   const out = [];
   for (const p of ctx.prospects) {
-    if (p.stage === 'contactee' && isDate(p.firstContact)) {
-      out.push(makeTask({ key: `p:${p.id}:relance`, prospectId: p.id, date: addDays(day(p.firstContact), ctx.config.prospectFollowUpDays), title: `Relancer ${p.name} (prospection)` }));
+    const since = isDate(p.stageChangedAt) ? day(p.stageChangedAt) : isDate(p.firstContact) ? day(p.firstContact) : null;
+    if (p.stage === 'contactee' && since) {
+      out.push(makeTask({ key: `p:${p.id}:relance:${since}`, prospectId: p.id, date: addDays(since, ctx.config.prospectFollowUpDays),
+        title: `Relancer ${crecheName(p.name)} par mail`, note: [`Contactée le ${fmtDate(since)}, sans nouvelles depuis.`] }));
     }
     if (p.stage === 'visio' && isDate(p.visioDate)) {
-      out.push(makeTask({ key: `p:${p.id}:visio`, prospectId: p.id, date: day(p.visioDate), time: timeOf(p.visioDate), kind: 'event', title: `Visio découverte avec ${p.name}` }));
+      out.push(makeTask({ key: `p:${p.id}:visio`, prospectId: p.id, date: day(p.visioDate), time: timeOf(p.visioDate), kind: 'event', title: `Faire la visio découverte avec ${crecheName(p.name)}` }));
     }
   }
   return out;
@@ -524,7 +549,15 @@ export function computeAll(state, today, { monthsAhead = 3 } = {}) {
     t.itemsDone = t.items ? t.items.filter((i) => st.items?.[i.id]).length : 0;
     t.done = !!(st.done || t.autoDone || (t.question && st.answer) || (t.items?.length && itemsDone));
     t.doneAt = st.doneAt || null;
+    // « Demain » : la tâche est reportée, sans passer en retard
+    if (!t.done && isDate(st.snoozedUntil) && day(st.snoozedUntil) > t.date) {
+      t.snoozedUntil = day(st.snoozedUntil);
+      t.plannedDate = t.date;
+      t.date = t.snoozedUntil;
+      if (t.due && t.due < t.date) t.due = t.date;
+    }
     t.end = t.due || t.date;
+    t.legalSoon = !!(t.legal && !t.done && t.date <= today && diffDays(today, t.end) <= ctx.config.legalNoticeDays);
     t.late = !t.done && t.end < today;
     if (t.daily && !t.done && t.date < today) t.hidden = true;
     t.today = !t.done && (t.date === today || t.due === today);
@@ -542,7 +575,7 @@ export function computeAll(state, today, { monthsAhead = 3 } = {}) {
     for (const t of group) if (t !== keep) t.hidden = true;
   }
   tasks.sort((a, b) => (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99')));
-  return { ctx, tasks, invoices };
+  return { ctx, tasks, invoices, mode: ctx.mode, launch: ctx.launch };
 }
 
 // ---------------------------------------------------------------- Vues
@@ -588,7 +621,10 @@ export function moneySummary(all, today) {
   const y = today.slice(0, 4);
   const monthRev = encaisse(invoices, firstOf(m), lastOf(m));
   const yearRev = encaisse(invoices, `${y}-01-01`, `${y}-12-31`);
-  const regular = ctx.clients.filter((c) => invoices.some((i) => i.clientId === c.id && i.status === 'payee' && i.amount > 0));
+  const real = ctx.clients.filter((c) => !c.test);
+  const regular = real.filter((c) => invoices.some((i) => i.clientId === c.id && i.status === 'payee' && i.amount > 0));
+  const inTrial = real.filter((c) => !regular.includes(c) && clientStage(c, today) === 'offert');
+  const goal = regular.length < s.goalClients ? s.goalClients : s.goalClients2;
   const nextUrssaf = all.tasks.filter((t) => t.kind === 'urssaf' && !t.done).sort((a, b) => a.due.localeCompare(b.due))[0] || null;
   return {
     monthRev, yearRev,
@@ -596,7 +632,8 @@ export function moneySummary(all, today) {
     urssafEstimateYear: Math.round(yearRev * s.urssafRate) / 100,
     tvaRatio: yearRev / s.tvaThreshold,
     tvaAlert: yearRev >= s.tvaThreshold * s.tvaAlertRatio,
-    regularCount: regular.length, goal: s.goalClients,
+    regularCount: regular.length, trialCount: inTrial.length, goal,
+    goalLabel: goal === s.goalClients ? 'Compléter le chômage' : 'Remplacer mon salaire',
     monthInvoices: invoices.filter((i) => i.month === m || (i.status !== 'payee' && i.month < m)),
     nextUrssaf,
   };
@@ -604,39 +641,52 @@ export function moneySummary(all, today) {
 
 // ---------------------------------------------------------------- Notifications
 
-const short = (t) => (t.client ? `${t.client.name} : ${t.title.replace(new RegExp(` (de|à|avec|pour) ${escapeRe(t.client.name)}`), '')}` : t.title);
-function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-const listLine = (tasks, max = 3) => tasks.slice(0, max).map(short).join(' · ') + (tasks.length > max ? ` · +${tasks.length - max}` : '');
-const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
+// Ce qui peut être notifié. En mode lancement (aucune cliente réelle) : seulement les clientes
+// test, mes tâches ajoutées à la main, et les échéances légales ou paiements une fois
+// l'entreprise créée. L'étape en cours de la checklist est ajoutée au résumé du matin.
+export function notifiable(t, ctx) {
+  if (t.done || t.hidden) return false;
+  if (ctx.mode === 'clientes') return true;
+  if (t.client) return !!t.client.test;
+  if (t.manual) return true;
+  if (t.mine) return !!t.legal && ctx.entrepriseCreated;
+  return false;
+}
 
-// kind : 'summary' (8 h), 'reminder' (10 h / 12 h), 'weekly' (lundi 8 h). Renvoie null si rien à envoyer.
-export function buildNotification(state, today, kind) {
+const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
+const bullets = (tasks, max = 4) => tasks.slice(0, max).map((t) => `• ${t.title}`).concat(tasks.length > max ? [`• et ${tasks.length - max} autre${tasks.length - max > 1 ? 's' : ''}`] : []);
+
+// Une seule notification par créneau. kind : 'summary' (8 h, avec la semaine le lundi si weekly)
+// ou 'reminder' (10 h / 12 h). Renvoie null s'il n'y a rien à faire.
+export function buildNotification(state, today, kind, { weekly = false } = {}) {
   const all = computeAll(state, today, { monthsAhead: 2 });
-  const v = todayView(all, today);
-  const todays = [...v.today];
+  const { ctx } = all;
+  const open = all.tasks.filter((t) => notifiable(t, ctx));
+  const late = open.filter((t) => t.late);
+  const todays = open.filter((t) => !t.late && (t.date === today || t.due === today || t.legalSoon));
+  const lines = [];
   if (kind === 'summary') {
-    const n = todays.length;
-    let body = n ? `Aujourd’hui : ${plural(n, 'tâche')} · ${listLine(todays)}` : 'Aujourd’hui : rien de prévu. Belle journée !';
-    if (v.late.length) body += ` (+ ${plural(v.late.length, 'tâche')} en retard)`;
-    return { title: `Serelys · ${fmtDate(today)}`, body, tag: `summary-${today}` };
+    const step = ctx.mode === 'lancement' ? currentLaunchStep(ctx.launch) : null;
+    if (step) lines.push(`Étape en cours : ${step.label}`);
+    if (todays.length) lines.push(`Aujourd’hui :`, ...bullets(todays));
+    if (late.length) lines.push(`En retard : ${plural(late.length, 'tâche')}`);
+    if (weekly) {
+      const end = addDays(today, 6);
+      const week = open.filter((t) => !t.daily && t.date > today && t.date <= end);
+      if (week.length) {
+        const visios = week.filter((t) => t.kind === 'event').length;
+        const invoices = week.filter((t) => t.kind === 'invoice').length;
+        lines.push(`Cette semaine : ${plural(week.length, 'tâche')}${visios ? `, dont ${plural(visios, 'visio')}` : ''}${invoices ? `${visios ? ' et' : ', dont'} ${plural(invoices, 'facture')} à envoyer` : ''}`);
+      }
+    }
+    if (!lines.length) return null;
+    return { title: `Serelys · ${fmtDate(today)}`, body: lines.join('\n'), tag: `summary-${today}`, count: todays.length + late.length };
   }
   if (kind === 'reminder') {
-    if (!todays.length && !v.late.length) return null;
-    const parts = [];
-    if (todays.length) parts.push(`Il reste ${plural(todays.length, 'tâche')} aujourd’hui : ${listLine(todays, 2)}`);
-    if (v.late.length) parts.push(`${plural(v.late.length, 'tâche')} en retard : ${listLine(v.late, 2)}`);
-    return { title: 'Serelys · petit rappel', body: parts.join(' · '), tag: `reminder-${today}` };
-  }
-  if (kind === 'weekly') {
-    const end = addDays(today, 6);
-    const week = all.tasks.filter((t) => !t.done && !t.hidden && !t.daily && t.date >= today && t.date <= end);
-    const visios = week.filter((t) => t.kind === 'event');
-    const inv = all.invoices.filter((i) => i.status === 'a_envoyer' && i.date >= today && i.date <= end);
-    const parts = [`Cette semaine : ${plural(week.length, 'tâche')}`];
-    if (visios.length) parts.push(`${plural(visios.length, 'visio')} (${visios.map((t) => `${t.client?.name || ''} ${fmtShort(t.date)}`.trim()).join(', ')})`);
-    if (inv.length) parts.push(`${plural(inv.length, 'facture')} à envoyer (${inv.map((i) => all.ctx.byId[i.clientId].name).join(', ')})`);
-    if (v.late.length) parts.push(`${plural(v.late.length, 'tâche')} en retard`);
-    return { title: 'Serelys · ma semaine', body: parts.join(' · '), tag: `weekly-${today}` };
+    if (!todays.length && !late.length) return null;
+    if (todays.length) lines.push(`Il reste ${plural(todays.length, 'chose')} à faire aujourd’hui :`, ...bullets(todays, 3));
+    if (late.length) lines.push(`En retard :`, ...bullets(late, todays.length ? 2 : 3));
+    return { title: 'Serelys · petit rappel', body: lines.join('\n'), tag: `reminder-${today}`, count: todays.length + late.length };
   }
   return null;
 }

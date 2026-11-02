@@ -5,8 +5,8 @@ import { dueSlots, markSent, dueEvents, markEvents } from '../supabase/functions
 const times = { summary: '08:00', weekly: '08:00', reminders: ['10:00', '12:00'] };
 
 test('8 h : résumé du jour, et le lundi le résumé de la semaine', () => {
-  assert.deepEqual(dueSlots({ date: '2026-11-03', time: '08:00', weekday: 2 }, times).map((x) => x.kind), ['summary']);
-  assert.deepEqual(dueSlots({ date: '2026-11-02', time: '08:00', weekday: 1 }, times).map((x) => x.kind), ['summary', 'weekly']);
+  assert.deepEqual(dueSlots({ date: '2026-11-03', time: '08:00', weekday: 2 }, times).map((x) => [x.kind, x.weekly]), [['summary', false]]);
+  assert.deepEqual(dueSlots({ date: '2026-11-02', time: '08:00', weekday: 1 }, times).map((x) => [x.kind, x.weekly]), [['summary', true]], 'une seule notification le lundi');
   assert.deepEqual(dueSlots({ date: '2026-11-03', time: '07:45', weekday: 2 }, times), []);
 });
 

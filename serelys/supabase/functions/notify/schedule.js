@@ -13,7 +13,8 @@ export function dueSlots(now, times, log = {}) {
   const inWindow = (t) => toMin(now.time) >= toMin(t) && toMin(now.time) < toMin(t) + 60;
   const want = (kind, t) => { const k = `${kind}:${t}`; if (inWindow(t) && sent[k] !== now.date) out.push({ kind, slot: t, logKey: k }); };
   want('summary', times.summary);
-  if (now.weekday === 1) want('weekly', times.weekly || times.summary);
+  // Le lundi, le résumé de la semaine est dans la même notification que celui du jour
+  for (const x of out) if (x.kind === 'summary') x.weekly = now.weekday === 1;
   for (const t of times.reminders || []) want('reminder', t);
   return out;
 }

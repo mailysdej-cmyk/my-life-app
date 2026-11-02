@@ -13,7 +13,7 @@ export function SettingsScreen({ S, settings, all, today, act, onBack }) {
     ['activity', 'leaf', 'Mon activité', 'SIRET, ACRE, assurance, dates'],
     ['money', 'euro', 'Urssaf, taux et seuils', `${settings.urssafPeriod}, ${String(settings.urssafRate).replace('.', ',')} %, TVA ${euro(settings.tvaThreshold)}`],
     ['rules', 'calendar', 'Mes règles', 'Catalogue des tâches et leurs dates'],
-    ['backup', 'download', 'Sauvegarde', 'Exporter / importer mes données'],
+    ['backup', 'download', 'Sauvegarde', 'Automatique en ligne · copie de secours'],
     ['security', 'lock', 'Sécurité et compte', 'Double authentification, déconnexion'],
   ];
   const Cur = { notif: Notifications, activity: Activity, money: MoneySettings, rules: Rules, backup: Backup, security: Security }[sec];
@@ -24,6 +24,7 @@ export function SettingsScreen({ S, settings, all, today, act, onBack }) {
       <div class="row"><span class="icon-btn" style="box-shadow:none;background:var(--card-2)"><${Icon} name=${icon} /></span>
         <div class="grow"><div style="font-weight:800;font-size:17px">${title}</div><div class="small muted">${sub}</div></div></div></button>`)}
       <${Field} label="Lien de la Bibliothèque Serelys"><${TextLine} type="url" value=${settings.libraryUrl} onChange=${(v) => save({ libraryUrl: v })} placeholder="https://…" /></${Field}>
+      <button class="btn block" style="margin-bottom:12px" onClick=${() => downloadCopy(act)}><${Icon} name="download" /> Télécharger une copie</button>
       <a class="btn block" href="mode-d-emploi.html">Mode d’emploi</a>
       <p class="small muted center" style="margin-top:20px">Serelys · ${act.store.demo ? 'mode démo' : 'données en ligne (Supabase)'}</p>`}
   </div>`;
@@ -88,7 +89,8 @@ function Activity({ settings, save }) {
     <h3>Rappels annuels et uniques</h3>
     <${Field} label="Relire mes obligations d’entrepreneuse, chaque année le"><${Input} type="date" value=${`${new Date().getFullYear()}-${settings.obligationsDate}`} onChange=${(v) => v && save({ obligationsDate: v.slice(5, 10) })} /></${Field}>
     <${Field} label="Préparer la facture électronique : le"><${Input} type="date" value=${settings.eInvoiceDate || ''} onChange=${(v) => save({ eInvoiceDate: v || null })} /></${Field}>
-    <${Field} label="Objectif de clientes régulières"><${Input} type="number" min="1" value=${settings.goalClients} onChange=${(v) => save({ goalClients: Math.max(1, Number(v) || 2) })} /></${Field}>
+    <${Field} label="1er objectif : clientes pour compléter le chômage"><${Input} type="number" min="1" value=${settings.goalClients} onChange=${(v) => save({ goalClients: Math.max(1, Number(v) || 2) })} /></${Field}>
+    <${Field} label="2e objectif : clientes pour remplacer mon salaire"><${Input} type="number" min="1" value=${settings.goalClients2} onChange=${(v) => save({ goalClients2: Math.max(1, Number(v) || 5) })} /></${Field}>
   </div>`;
 }
 
@@ -156,21 +158,24 @@ function Rules({ S, all, act, save }) {
     <button class="btn ghost block" onClick=${() => { if (confirm('Revenir aux règles de départ ? Tes tâches cochées sont gardées.')) save({ config: {} }); }}>Revenir aux règles de départ</button>`;
 }
 
+// Copie de secours de toutes mes données (fichier), en plus de la sauvegarde en ligne automatique.
+export async function downloadCopy(act) {
+  const items = {};
+  for (const [k, rows] of Object.entries(act.store.items)) if (!['push', 'system', 'backup'].includes(k)) items[k] = rows;
+  const data = JSON.stringify({ app: 'serelys', version: 1, exportedAt: new Date().toISOString(), items }, null, 1);
+  const name = `serelys-copie-${new Date().toISOString().slice(0, 10)}.json`;
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  act.say('Copie téléchargée');
+}
+
 function Backup({ S, act }) {
   const [busy, setBusy] = useState(false);
-  const exportData = async () => {
-    const items = {};
-    for (const [k, rows] of Object.entries(act.store.items)) if (k !== 'push' && k !== 'system') items[k] = rows;
-    const data = JSON.stringify({ app: 'serelys', version: 1, exportedAt: new Date().toISOString(), items }, null, 1);
-    const name = `serelys-sauvegarde-${new Date().toISOString().slice(0, 10)}.json`;
-    const file = new File([data], name, { type: 'application/json' });
-    if (navigator.canShare?.({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: name }); return; } catch (e) { if (e.name === 'AbortError') return; }
-    }
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove();
-    act.say('Fichier de sauvegarde créé');
-  };
+  const exportData = () => downloadCopy(act);
   const importData = async (file) => {
     if (!file) return;
     setBusy(true);
@@ -185,8 +190,9 @@ function Backup({ S, act }) {
     setBusy(false);
   };
   return html`<div class="card">
-    <p style="margin-bottom:14px">Tes données sont déjà sauvegardées en ligne. Ce fichier est une sécurité en plus : garde-le dans tes Fichiers ou ton Drive, par exemple une fois par mois.</p>
-    <button class="btn primary block" onClick=${exportData}><${Icon} name="download" /> Exporter mes données</button>
+    <p style="margin-bottom:10px">Chaque modification est sauvegardée toute seule en ligne, dans ton espace privé. Tu retrouves tout sur ton iPhone et ton Mac, même si tu changes de téléphone.</p>
+    <p style="margin-bottom:14px">Sans internet, l’appli garde une copie sur l’appareil et envoie tes modifications dès que la connexion revient. Le fichier ci-dessous est une sécurité en plus : garde-le dans Fichiers ou ton Drive, par exemple une fois par mois.</p>
+    <button class="btn primary block" onClick=${exportData}><${Icon} name="download" /> Télécharger une copie</button>
     <label class="btn block" style="margin-top:12px"><${Icon} name="upload" /> Importer une sauvegarde
       <input type="file" accept="application/json,.json" class="hidden" disabled=${busy} onChange=${(e) => importData(e.target.files[0])} /></label>
     <p class="small muted" style="margin-top:12px">${Object.keys(act.store.items.client || {}).length} clientes · ${Object.keys(act.store.items.task || {}).length} tâches cochées · ${Object.keys(act.store.items.card || {}).length} cartes</p>

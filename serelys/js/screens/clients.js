@@ -22,7 +22,7 @@ export function ClientsScreen(p) {
     return html`<button class="card client-card" onClick=${() => setClientId(x.id)}>
       <div class="spread"><div class="row grow"><span class="dot" style=${`background:${x.color};width:16px;height:16px`}></span><b style="font-size:18px">${x.name}</b></div>
         <span class=${`chip ${STAGE_CHIP[stage]}`}>${STAGES[stage]}</span></div>
-      <div class="spread" style="margin-top:10px"><span class="chip">${config.plans[x.plan]?.label}</span><span class="price">${euro(price)}<span class="small muted"> /mois</span></span></div>
+      <div class="spread" style="margin-top:10px"><span class="row" style="gap:6px"><span class="chip">${config.plans[x.plan]?.label}</span>${x.test ? html`<span class="chip">Cliente test</span>` : null}</span><span class="price">${euro(price)}<span class="small muted"> /mois</span></span></div>
       ${stage === 'setup' || stage === 'prospect' || (prog.ratio < 1 && stage !== 'ancienne') ? html`<div class="progress" aria-label="Mise en place"><span style=${`width:${Math.round(prog.ratio * 100)}%`}></span></div>
         <div class="small muted" style="margin-top:6px">Mise en place : ${Math.round(prog.ratio * 100)} %</div>` : null}
     </button>`;
@@ -42,7 +42,7 @@ export function NewClient({ S, act, today, config, onClose, onCreated, initial =
   const nextMonth = addMonthsYm(ym(today), 1);
   const [step, setStep] = useState(1);
   const [c, setC] = useState({
-    name: '', directorFirstName: '', directorEmail: '', plan: 'premium', style: 'classique', marraineId: null, howKnown: '',
+    name: '', directorFirstName: '', directorEmail: '', test: false, plan: 'premium', style: 'classique', marraineId: null, howKnown: '',
     discoveryDate: today, offertOn: true, offertStart: firstOf(nextMonth), offertEnd: lastOf(nextMonth), startDate: firstOf(nextMonth), ...initial,
   });
   const set = (k) => (v) => setC({ ...c, [k]: v });
@@ -50,7 +50,7 @@ export function NewClient({ S, act, today, config, onClose, onCreated, initial =
   const create = async () => {
     const id = act.uid();
     const data = {
-      name: c.name.trim(), directorFirstName: c.directorFirstName.trim(), directorEmail: c.directorEmail.trim(), plan: c.plan, style: c.style,
+      name: c.name.trim(), test: !!c.test, directorFirstName: c.directorFirstName.trim(), directorEmail: c.directorEmail.trim(), plan: c.plan, style: c.style,
       marraineId: c.marraineId || null, howKnown: c.howKnown || '', color: act.newClientColor(), createdAt: today,
       discoveryDate: c.discoveryDate || null,
       offert: c.offertOn ? { enabled: true, start: c.offertStart, end: c.offertEnd } : { enabled: false },
@@ -70,7 +70,8 @@ export function NewClient({ S, act, today, config, onClose, onCreated, initial =
       <${Field} label="Nom de la crèche"><${Input} value=${c.name} onChange=${set('name')} placeholder="Ex. Crèche Les Petits Pas" /></${Field}>
       <${Field} label="Prénom de la directrice"><${Input} value=${c.directorFirstName} onChange=${set('directorFirstName')} /></${Field}>
       <${Field} label="Mail professionnel de la directrice"><${Input} type="email" value=${c.directorEmail} onChange=${set('directorEmail')} /></${Field}>
-      <button class="btn primary block" disabled=${!c.name.trim()} onClick=${() => setStep(2)}>Continuer</button>` : null}
+      <${Switch} label="Cliente test" value=${!!c.test} onChange=${set('test')}><div class="small muted" style="font-weight:600">Elle a ses rappels, mais ne compte pas comme vraie cliente.</div></${Switch}>
+      <button class="btn primary block" style="margin-top:8px" disabled=${!c.name.trim()} onClick=${() => setStep(2)}>Continuer</button>` : null}
     ${step === 2 ? html`
       <${Field} label="Forfait"><${Seg} value=${c.plan} onChange=${set('plan')} options=${Object.entries(config.plans).map(([k, p]) => [k, `${p.label} ${p.price} €`])} /></${Field}>
       <${Field} label="Style de ses documents"><${Seg} value=${c.style} onChange=${set('style')} options=${Object.entries(STYLES).map(([k, l]) => [k, l[0].toUpperCase() + l.slice(1)])} /></${Field}>
@@ -127,6 +128,10 @@ function ClientDetail({ S, all, today, act, c, onBack, settings }) {
       <div class="grow" style="min-width:0"><div class="row"><span class="dot" style=${`background:${c.color};width:14px;height:14px`}></span><h1 style="font-size:23px;overflow:hidden;text-overflow:ellipsis">${c.name}</h1></div></div>
       <span class=${`chip ${STAGE_CHIP[stage]}`}>${STAGES[stage]}</span></div>
 
+    <div class="card flat" style="padding:6px 18px">
+      <${Switch} label="Cliente test" value=${!!c.test} onChange=${(v) => save({ test: v })}>
+        <div class="small muted" style="font-weight:600">${c.test ? 'Ses rappels marchent (et sont notifiés), mais elle ne compte ni comme vraie cliente ni dans mes objectifs.' : 'À cocher pour une crèche fictive qui sert à tester l’appli.'}</div></${Switch}>
+    </div>
     ${svc.has('visio') && c.plan === 'premium' ? html`<div class="banner info"><${Icon} name="heart" /> Support prioritaire : répondre sous 24 h ouvrées.</div>` : null}
     ${late.length ? html`<div class="banner warn"><${Icon} name="alert" /> ${late.length} tâche(s) en retard pour cette cliente.</div>` : null}
 

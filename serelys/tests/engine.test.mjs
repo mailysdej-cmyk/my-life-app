@@ -224,7 +224,7 @@ test('Notifications : résumé à 8 h, rappels seulement s’il reste des tâche
   const s = baseState();
   const sum = buildNotification(s, '2026-11-05', 'summary');
   assert.match(sum.title, /jeudi 5 novembre/);
-  assert.match(sum.body, /Aujourd’hui : \d+ tâches/);
+  assert.match(sum.body, /^Aujourd’hui :\n• /);
   const rem = buildNotification(s, '2026-11-05', 'reminder');
   assert.ok(rem);
   // Tout coché ce jour-là, rien en retard → pas de rappel
@@ -232,9 +232,11 @@ test('Notifications : résumé à 8 h, rappels seulement s’il reste des tâche
   for (const t of all.tasks) if (t.date <= '2026-11-05') s.taskState[t.stateKey] = { done: true, doneAt: '2026-11-05' };
   for (const i of all.invoices) if (i.date <= '2026-11-05') s.invoiceState[i.key] = { status: 'payee', sentAt: i.date, paidAt: i.date, amount: i.amount };
   assert.equal(buildNotification(s, '2026-11-05', 'reminder'), null);
-  const w = buildNotification(baseState(), '2026-11-09', 'weekly');
-  assert.match(w.body, /Cette semaine/);
-  assert.match(w.body, /visio/);
+  // Lundi : une seule notification, avec la semaine dedans
+  const w = buildNotification(baseState(), '2026-11-09', 'summary', { weekly: true });
+  assert.match(w.body, /Cette semaine : \d+ tâches, dont 1 visio/);
+  // Rien à faire → aucune notification, même à 8 h
+  assert.equal(buildNotification(s, '2026-11-05', 'summary'), null);
 });
 
 test('Dates en français', () => {
@@ -248,15 +250,16 @@ test('Mise à jour des règles (moteurs, compte rendu, obligations, formation, r
   // 2. Compte rendu
   const cr = find(all, 'c:C:cr:2026-11');
   assert.equal(cr.date, '2026-11-20');
-  assert.match(cr.title, /notes reçues \? brouillon relu et envoyé \?$/);
+  assert.equal(cr.title, 'Envoyer le compte rendu de réunion à la crèche Test Premium');
   assert.equal(cr.items.length, 2);
   // 3. Obligations
-  assert.match(find(all, 'c:C:echeances-check:2026-11').title, /suivi des obligations de Crèche Test Premium \(formations, sécurité, PMI, Caf\)/);
+  assert.equal(find(all, 'c:C:echeances-check:2026-11').title, 'Vérifier les alertes d’obligations de la crèche Test Premium');
+  assert.deepEqual(find(all, 'c:C:echeances-check:2026-11').note, ['Formations, sécurité, PMI, Caf.']);
   // 5. Formation
-  assert.equal(find(all, 'c:C:reunion-prep:2026-11').title, 'Préparer l’ordre du jour de la réunion d’équipe de décembre pour Crèche Test Premium');
+  assert.equal(find(all, 'c:C:reunion-prep:2026-11').title, 'Préparer l’ordre du jour de la réunion de décembre pour la crèche Test Premium');
   const fb = find(all, 'c:C:formation-besoin:2026-11');
   assert.equal(fb.date, '2026-11-20'); assert.equal(fb.due, '2026-11-25');
-  assert.match(fb.title, /ligne de décembre dans son tableau « Idées de formation »/);
+  assert.match(fb.note[0], /ligne de décembre dans son tableau « Idées de formation »/);
   assert.equal(find(all, 'c:B:formation-besoin:2026-11'), undefined, 'Premium seulement');
   assert.ok(!find(all, 'c:C:livraison:2026-11').items.some((i) => /formation/i.test(i.label)), 'l’idée de formation part toute seule le 28');
   assert.ok(!all.tasks.some((t) => /veille/i.test(t.title + JSON.stringify(t.items || []))), 'plus de « veille formations »');

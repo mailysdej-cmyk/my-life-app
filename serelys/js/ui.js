@@ -126,7 +126,7 @@ export function TaskRow({ t, today, act, showClient = true, showDate = true }) {
     ${t.question ? html`<span class="check ${t.done ? 'on' : 'dis'}" aria-hidden="true"><${Icon} name="check" size=${18} stroke=${3} /></span>`
       : html`<${Check} on=${t.done} disabled=${!canToggle && !t.done} onClick=${() => act.toggle(t)} label=${t.title} />`}
     <div class="t-body">
-      ${showClient && (t.client || t.mine) ? html`<div class="t-client"><span class="dot" style=${`background:${color}`}></span>${t.client ? t.client.name : 'Mon entreprise'}</div>` : null}
+      ${showClient && (t.client || t.mine) ? html`<div class="t-client"><span class="dot" style=${`background:${color}`}></span>${t.client ? t.client.name : 'Mon entreprise'}${t.client?.test ? html` <span class="chip">Test</span>` : null}</div>` : null}
       <div class="t-title">${t.title}</div>
       <div class="t-meta">
         ${dateChip()}
@@ -135,10 +135,16 @@ export function TaskRow({ t, today, act, showClient = true, showDate = true }) {
         ${t.ongoing ? html`<span class="chip sage">En cours</span>` : null}
         ${t.blocked && !t.done ? html`<span class="chip rose"><${Icon} name="lock" size=${13} /> Bloqué</span>` : null}
         ${t.done && t.doneAt ? html`<span class="chip sage">Fait le ${fmtShort(day(t.doneAt))}</span>` : null}
+        ${t.snoozedUntil && !t.done ? html`<span class="chip blue">Reporté (prévu le ${fmtShort(t.plannedDate)})</span>` : null}
       </div>
-      ${t.question && !st.answer ? html`<div class="row" style="margin-top:12px" onClick=${(e) => e.stopPropagation()}>
+      ${!t.done && !t.question && act.snooze ? html`<div class="row" style="margin-top:12px" onClick=${(e) => e.stopPropagation()}>
+        <button class="btn small primary" disabled=${!canToggle} onClick=${() => act.toggle(t)}><${Icon} name="check" size=${16} stroke=${2.6} /> Fait</button>
+        ${t.daily || t.kind === 'event' || t.date > today ? null : html`<button class="btn small" onClick=${() => act.snooze(t)}>Demain</button>`}
+      </div>` : null}
+      ${t.question && !st.answer ? html`<div class="row wrap" style="margin-top:12px" onClick=${(e) => e.stopPropagation()}>
         <button class="btn small primary" onClick=${() => act.answer(t, 'oui')}>Oui, reçues</button>
-        <button class="btn small peach" onClick=${() => act.answer(t, 'non')}>Non</button></div>` : null}
+        <button class="btn small peach" onClick=${() => act.answer(t, 'non')}>Non</button>
+        ${t.date > today || !act.snooze ? null : html`<button class="btn small" onClick=${() => act.snooze(t)}>Demain</button>`}</div>` : null}
       ${t.question && st.answer ? html`<div class="small muted" style="margin-top:6px">Réponse : ${st.answer === 'oui' ? 'oui' : 'non, relance prévue'} · <a href="#" onClick=${(e) => { e.preventDefault(); e.stopPropagation(); act.answer(t, null); }}>changer</a></div>` : null}
       ${open || (items.length && !t.done && t.today) ? html`<div class="t-detail" onClick=${(e) => e.stopPropagation()}>
         ${t.warning ? html`<div class="warn">${t.warning}</div>` : null}
@@ -146,9 +152,7 @@ export function TaskRow({ t, today, act, showClient = true, showDate = true }) {
         ${items.map((i) => html`<div class="item"><${Check} on=${!!st.items?.[i.id]} onClick=${() => act.toggleItem(t, i.id)} label=${i.label} /><span>${i.label}</span></div>`)}
         ${t.note?.length ? html`<ul>${t.note.map((l) => html`<li>${l}</li>`)}</ul>` : null}
         ${t.notes ? html`<p class="small" style="margin-top:6px;white-space:pre-wrap">${t.notes}</p>` : null}
-        ${t.kind === 'invoice' ? html`<div class="row wrap" style="margin-top:10px">
-          ${t.autoDone ? html`<span class="small muted">Facture marquée envoyée. Pour la suite : onglet « Mon argent ».</span>`
-            : html`<button class="btn small primary" disabled=${!!t.blocked} onClick=${() => act.toggle(t)}>Je l’ai envoyée</button>`}</div>` : null}
+        ${t.kind === 'invoice' ? html`<div class="small muted" style="margin-top:10px">${t.autoDone ? 'Facture marquée envoyée. Pour la suite : onglet « Mon argent ».' : '« Fait » la marque comme envoyée.'}</div>` : null}
         <div class="row wrap" style="margin-top:10px">
           ${t.clientId ? html`<button class="btn small ghost" onClick=${() => act.openClient(t.clientId)}>Voir la fiche</button>` : null}
           ${t.manual ? html`<button class="btn small ghost" onClick=${() => act.editManual(t.manualId)}>Modifier</button>` : null}
