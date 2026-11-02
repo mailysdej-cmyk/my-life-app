@@ -16,7 +16,7 @@ export const DEFAULT_CONFIG = {
   lateDays: 15,
   filleulePremiumDiscount: 50,
   parrainageCredit: 150,
-  prospectFollowUpDays: 10,
+  prospectFollowUpDays: 7,
 
   // Prestations récurrentes (échangeables / ajoutables). « plan » = forfait d'origine.
   services: [
@@ -37,42 +37,53 @@ export const DEFAULT_CONFIG = {
 
   // Tâches mensuelles. service = null : pour toutes les clientes actives.
   // day = jour du mois (29 = 29 ou dernier jour) ; dueDay = échéance si la tâche s'étale.
+  // Titres : ce que je fais + pour quelle crèche ({creche} = « la crèche Les Lucioles »).
   rules: [
-    { id: 'facture', service: null, day: 1, title: 'Envoyer la facture de {creche}' },
-    { id: 'infos-mail', service: 'infos', day: 1, title: 'Vérifier que le mail « infos du mois » est bien parti à {creche}' },
-    { id: 'visio-proposer', service: 'visio', day: 1, title: 'Proposer la date de la visio de suivi de {mois} à {creche}' },
-    { id: 'newsletter-check', service: 'newsletter', day: 2, title: 'Vérifier que la newsletter de {creche} est bien partie aux familles' },
-    { id: 'infos-recues', service: null, day: 5, title: 'Ai-je reçu les infos du mois de {creche} ?' },
-    { id: 'programme', service: 'programme', day: 5, dueDay: 20, title: 'Préparer le programme de {mois1} de {creche} (kit du mois)' },
-    { id: 'reunion-prep', service: 'reunion', day: 5, dueDay: 25, title: 'Préparer l’ordre du jour de la réunion d’équipe de {mois1} pour {creche}' },
-    { id: 'moteurs', service: null, day: 7, title: 'Vérifier que les moteurs de {creche} ont bien tourné' },
-    { id: 'echeances-check', service: 'echeances', day: 7, title: 'Vérifier les alertes du suivi des obligations de {creche} (formations, sécurité, PMI, Caf)' },
-    { id: 'qualite', service: null, day: 10, title: 'Contrôle qualité {creche} : relire 5 réponses automatiques aux familles et les mails transmis à la direction ; corriger le moteur si besoin' },
-    { id: 'formation-besoin', service: 'formation', day: 20, dueDay: 25, title: 'La directrice de {creche} a-t-elle signalé un besoin de formation ? Si oui, changer la ligne de {mois1} dans son tableau « Idées de formation » avant le 25' },
-    { id: 'newsletter-annee', service: 'newsletter', day: 1, months: [12], title: 'Remplir l’onglet Newsletter de {creche} pour les 12 mois de l’année suivante' },
-    { id: 'newsletter-prep', service: 'newsletter', day: 20, dueDay: 24, title: 'Préparer la newsletter de {mois1} pour {creche} et déposer le lien dans son tableau' },
+    { id: 'facture', service: null, day: 1, title: 'Envoyer la facture à {creche}' },
+    { id: 'infos-mail', service: 'infos', day: 1, title: 'Vérifier que le mail « infos du mois » est parti chez {creche}' },
+    { id: 'visio-proposer', service: 'visio', day: 1, title: 'Proposer une date de visio de {mois} à {creche}' },
+    { id: 'newsletter-check', service: 'newsletter', day: 2, title: 'Vérifier que la newsletter de {creche} est partie aux familles' },
+    { id: 'infos-recues', service: null, day: 5, title: 'Vérifier si j’ai reçu les infos du mois de {creche}' },
+    { id: 'programme', service: 'programme', day: 5, dueDay: 20, title: 'Préparer le programme de {mois1} pour {creche}' },
+    { id: 'reunion-prep', service: 'reunion', day: 5, dueDay: 25, title: 'Préparer l’ordre du jour de la réunion de {mois1} pour {creche}' },
+    { id: 'moteurs', service: null, day: 7, title: 'Vérifier que les moteurs de {creche} ont tourné' },
+    { id: 'echeances-check', service: 'echeances', day: 7, title: 'Vérifier les alertes d’obligations de {creche}', note: 'Formations, sécurité, PMI, Caf.' },
+    { id: 'qualite', service: null, day: 10, title: 'Contrôler les réponses automatiques de {creche}', note: 'Relire 5 réponses aux familles et les mails transmis à la direction. Corriger le moteur si besoin.' },
+    { id: 'formation-besoin', service: 'formation', day: 20, dueDay: 25, title: 'Vérifier si {creche} a signalé un besoin de formation', note: 'Si oui, changer la ligne de {mois1} dans son tableau « Idées de formation » avant le 25. Le Moteur formation envoie l’idée du mois suivant le 28.' },
+    { id: 'newsletter-annee', service: 'newsletter', day: 1, months: [12], title: 'Remplir l’onglet Newsletter de {creche} pour l’an prochain', note: 'Les 12 mois de l’année suivante.' },
+    { id: 'newsletter-prep', service: 'newsletter', day: 20, dueDay: 24, title: 'Préparer la newsletter de {mois1} pour {creche}', note: 'Déposer le lien dans son tableau : le moteur prévient ensuite la directrice.' },
     { id: 'livraison', service: null, day: 29, title: 'Livrer le travail du mois à {creche}' },
   ],
   baseDeliverables: ['Récapitulatif du mois (ce que les moteurs ont fait)'],
 
-  // Mes tâches d'entrepreneuse
+  // Mes tâches d'entrepreneuse. legal = date limite légale ou paiement : notifiée
+  // quelques jours avant l'échéance, même en mode lancement (une fois l'entreprise créée).
   myRules: [
-    { id: 'zapier', day: 1, title: 'Vérifier mon abonnement Zapier et le nombre de tâches utilisées' },
-    { id: 'anthropic', day: 1, title: 'Vérifier mon crédit Anthropic (API)' },
+    { id: 'zapier', day: 1, title: 'Vérifier mon abonnement Zapier', note: 'Et le nombre de tâches utilisées.', legal: true },
+    { id: 'anthropic', day: 1, title: 'Vérifier mon crédit Anthropic (API)', legal: true },
   ],
-  // Chaque jour du lundi au vendredi (une seule tâche pour toutes les clientes)
+  // Chaque jour du lundi au vendredi (une seule tâche pour toutes les clientes, seulement avec des clientes)
   weekdayRules: [
-    { id: 'boite', title: 'Lire la boîte Serelys : alertes des moteurs et questions des directrices' },
+    { id: 'boite', title: 'Lire la boîte Serelys', note: 'Alertes des moteurs et questions des directrices.', clientsOnly: true },
   ],
   // Chaque année (MM-JJ)
   yearlyRules: [
-    { id: 'revenus', date: '05-01', title: 'Déclarer mes revenus d’auto-entrepreneuse' },
-    { id: 'regles-obligations', date: '09-01', title: 'Revérifier les règles du tableau des obligations et mettre à jour les tableaux des crèches Premium' },
-    { id: 'idees-formation', date: '10-01', title: 'Revérifier les idées de formation et mettre à jour les tableaux des crèches Premium' },
-    { id: 'prix', date: '11-01', title: 'Décider si j’augmente mes prix (prévenir chaque crèche 2 mois avant)' },
-    { id: 'programme-annee', date: '12-01', title: 'Préparer le programme d’activités de l’année suivante' },
-    { id: 'cfe', date: '12-01', due: '12-15', title: 'Payer la CFE (avant le 15 décembre)' },
+    { id: 'revenus', date: '05-01', title: 'Déclarer mes revenus d’auto-entrepreneuse aux impôts', legal: true },
+    { id: 'regles-obligations', date: '09-01', title: 'Mettre à jour les tableaux des obligations des crèches Premium', note: 'Revérifier d’abord les règles.' },
+    { id: 'idees-formation', date: '10-01', title: 'Mettre à jour les idées de formation des crèches Premium', note: 'Revérifier d’abord les idées.' },
+    { id: 'prix', date: '11-01', title: 'Décider si j’augmente mes prix', note: 'Prévenir chaque crèche 2 mois avant.' },
+    { id: 'programme-annee', date: '12-01', title: 'Préparer le programme d’activités de l’an prochain' },
+    { id: 'cfe', date: '12-01', due: '12-15', title: 'Payer la CFE', note: 'Avant le 15 décembre.', legal: true },
   ],
+
+  // Mode lancement : checklist de départ (modifiable dans l'onglet Aujourd'hui)
+  launchSteps: [
+    { id: 'site', label: 'Finir le site' },
+    { id: 'melodie', label: 'Faire les tests avec Mélodie' },
+    { id: 'entreprise', label: 'Créer l’entreprise' },
+    { id: 'premiere-cliente', label: 'Trouver ma première cliente' },
+  ],
+  legalNoticeDays: 5,
 
   oneshots: {
     essentiel: ['Planning type 35 h', 'Tableau des tailles de couches', 'Tableau contacts parents'],
@@ -123,7 +134,8 @@ export const DEFAULT_SETTINGS = {
   urssafRate: 26.1,
   tvaThreshold: 37500,
   tvaAlertRatio: 0.8,
-  goalClients: 2,
+  goalClients: 2,               // 1er objectif (compléter le chômage)
+  goalClients2: 5,              // 2e objectif (remplacer mon salaire)
   notifTimes: { summary: '08:00', reminders: ['10:00', '12:00'], weekly: '08:00' },
   libraryUrl: '',
   config: {},                   // surcharges de « Mes règles »

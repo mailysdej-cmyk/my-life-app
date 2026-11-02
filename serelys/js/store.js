@@ -100,12 +100,12 @@ export async function createStore() {
     load,
     async replaceAll(next, { merge = true } = {}) {
       for (const [kind, rows] of Object.entries(next)) {
-        if (kind === 'push' || kind === 'system') continue;
+        if (kind === 'push' || kind === 'system' || kind === 'backup') continue;
         for (const [id, data] of Object.entries(rows)) await write(kind, id, data);
       }
       if (!merge) {
         for (const [kind, rows] of Object.entries(items)) {
-          if (kind === 'push' || kind === 'system') continue;
+          if (kind === 'push' || kind === 'system' || kind === 'backup') continue;
           for (const id of Object.keys(rows)) if (!next[kind]?.[id]) await write(kind, id, null);
         }
       }

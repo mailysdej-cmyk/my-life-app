@@ -38,9 +38,12 @@ export function MoneyScreen({ S, all, today, act, openSettings }) {
     <div class="card">
       <div class="ring-wrap">
         <${Ring} value=${m.regularCount} max=${m.goal} label=${`${m.regularCount}/${m.goal}`} />
-        <div class="grow"><h2 style="margin-bottom:4px">Mon objectif</h2>
-          <div>${m.regularCount >= m.goal ? 'Objectif atteint : je peux préparer mon départ de mon poste salarié !' : `${m.goal} clientes régulières pour quitter mon poste salarié.`}</div>
-          <div class="small muted" style="margin-top:4px">Régulière = au moins une facture payée (hors mois offert).</div></div>
+        <div class="grow"><h2 style="margin-bottom:4px">${m.regularCount}/${m.goal} clientes${m.trialCount ? html` <span class="muted" style="font-weight:700">(+${m.trialCount} en essai)</span>` : null}</h2>
+          <div style="font-weight:700">${m.goalLabel}</div>
+          <div class="small muted" style="margin-top:4px">${m.goal === all.ctx.settings.goalClients
+            ? `Puis ${all.ctx.settings.goalClients2} clientes pour remplacer mon salaire.`
+            : `${all.ctx.settings.goalClients} clientes atteintes : le chômage est complété !`}</div>
+          <div class="small muted" style="margin-top:4px">Compte les clientes qui ont payé au moins une facture. Les clientes test ne comptent pas.</div></div>
       </div>
     </div>
 
@@ -75,7 +78,7 @@ export function MoneyScreen({ S, all, today, act, openSettings }) {
       ${shown.length ? shown.map((i) => html`<div class="inv">
         <span class="dot" style=${`background:${color(i.clientId)}`}></span>
         <div class="grow"><div style="font-weight:800">${name(i.clientId)}</div>
-          <div class="small muted" style="text-transform:none">${monthLabel(i.month)} · ${i.status === 'payee' ? `payée le ${fmtShort(day(i.paidAt))}` : i.status === 'envoyee' ? `à payer avant le ${fmtShort(i.due)}` : `à envoyer le ${fmtShort(i.date)}`}</div>
+          <div class="small muted" style="text-transform:none">${i.test ? 'Cliente test (hors chiffres) · ' : ''}${monthLabel(i.month)} · ${i.status === 'payee' ? `payée le ${fmtShort(day(i.paidAt))}` : i.status === 'envoyee' ? `à payer avant le ${fmtShort(i.due)}` : `à envoyer le ${fmtShort(i.date)}`}</div>
           ${i.discounts.length ? html`<div class="small" style="color:var(--sage-d);font-weight:700">${i.discounts.map((x) => `${x.label} −${euro(x.amount)}`).join(' · ')}</div>` : null}</div>
         <div style="text-align:right"><div style="font-weight:800">${euro(i.amount)}</div>
           <span class=${`chip ${i.status === 'payee' ? 'sage' : i.late ? 'peach' : i.status === 'envoyee' ? 'blue' : ''}`} style="margin-top:4px">${i.status === 'payee' ? 'Payée' : i.late ? `Retard ${i.daysLate} j` : i.status === 'envoyee' ? 'Envoyée' : 'À envoyer'}</span></div>

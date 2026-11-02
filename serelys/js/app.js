@@ -1,9 +1,10 @@
 import { html, render, useState, useEffect, useMemo } from '../vendor/preact-htm.js';
 import { createStore } from './store.js';
-import { computeAll, todayView, monthCycle } from './engine.js';
-import { parisNow, fmtDate, day, diffDays } from './dates.js';
+import { computeAll, todayView, monthCycle, currentLaunchStep } from './engine.js';
+import { parisNow, fmtDate, day, diffDays, addDays } from './dates.js';
+import { migrate } from './migrate.js';
 import { mergeSettings, CLIENT_COLORS } from './catalog.js';
-import { Icon, TaskRow, Sheet, Field, Input, Select, Toast, PrivacyHint } from './ui.js';
+import { Icon, TaskRow, Sheet, Field, Input, Select, Toast, PrivacyHint, Check } from './ui.js';
 import { ClientsScreen } from './screens/clients.js';
 import { MoneyScreen } from './screens/money.js';
 import { ProspectsScreen } from './screens/prospects.js';
@@ -14,6 +15,7 @@ export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().to
 const nowISO = () => new Date().toISOString();
 
 let store;
+let migrating = false;
 
 function derive(items) {
   const vals = (k) => Object.entries(items[k] || {}).map(([id, d]) => ({ ...d, id }));
@@ -25,6 +27,7 @@ function derive(items) {
     invoiceState: items.invoice || {},
     settings: items.settings?.main || {},
     cards: vals('card'),
+    launch: vals('launch'),
     push: vals('push'),
     system: items.system || {},
   };
@@ -84,12 +87,12 @@ function TodayScreen({ S, all, today, act, openSettings, banners }) {
     <div class="topbar"><div><div class="sub">${fmtDate(today)}</div><h1>Aujourd’hui</h1></div>
       <button class="icon-btn" onClick=${openSettings} aria-label="Réglages"><${Icon} name="gear" /></button></div>
     ${banners}
-    <div class="card">
+    ${all.mode === 'lancement' ? html`<${LaunchCard} steps=${all.launch} act=${act} />` : html`<div class="card">
       <h2><${Icon} name="leaf" size=${20} /> Où j’en suis ce mois-ci</h2>
       <div class="cycle">${cyc.phases.map((p) => html`<div class=${`ph ${cyc.phase === p.id ? 'on' : ''}`}>${p.label}<b>${p.range}</b></div>`)}</div>
       <div class="track" aria-label=${`Jour ${cyc.day} sur ${cyc.last}`}><span style=${`width:${(cyc.day / cyc.last) * 100}%`}></span></div>
       <div class="small muted" style="margin-top:8px">Jour ${cyc.day} sur ${cyc.last}</div>
-    </div>
+    </div>`}
     ${v.late.length ? sec('En retard', v.late) : null}
     ${sec('Aujourd’hui', v.today, v.late.length ? 'Rien d’autre de prévu aujourd’hui.' : 'Rien de prévu aujourd’hui. Profites-en !')}
     ${v.ongoing.length ? sec('En cours (avec échéance)', v.ongoing) : null}
@@ -97,6 +100,36 @@ function TodayScreen({ S, all, today, act, openSettings, banners }) {
     ${v.doneToday.length ? html`<div class="section-title"><button class="btn ghost small" onClick=${() => setShowDone(!showDone)}>${showDone ? 'Masquer' : 'Voir'} ce que j’ai fait aujourd’hui (${v.doneToday.length})</button></div>
       ${showDone ? v.doneToday.map((t) => html`<${TaskRow} key=${t.key} t=${t} today=${today} act=${act} />`) : null}` : null}
     <button class="fab" onClick=${() => act.editManual(null)} aria-label="Ajouter une tâche"><${Icon} name="plus" size=${28} stroke=${2.6} /></button>
+  </div>`;
+}
+
+// Mode lancement : ma checklist de départ, à cocher, modifier et compléter.
+function LaunchCard({ steps, act }) {
+  const [editing, setEditing] = useState(null);
+  const [label, setLabel] = useState('');
+  const [adding, setAdding] = useState('');
+  const current = currentLaunchStep(steps);
+  const done = steps.filter((x) => x.done).length;
+  const save = async () => { if (label.trim()) await act.saveStep(editing, { label: label.trim() }); setEditing(null); };
+  return html`<div class="card">
+    <h2><${Icon} name="leaf" size=${20} /> Mode lancement</h2>
+    <p class="small muted" style="margin:-4px 0 10px">Tant que je n’ai pas de vraie cliente. Les notifications ne parlent que de l’étape en cours.</p>
+    ${steps.length ? html`<div class="progress" style="margin:0 0 12px"><span style=${`width:${Math.round((done / steps.length) * 100)}%`}></span></div>` : null}
+    ${steps.map((x) => html`<div class="item" key=${x.id} style=${x === current ? 'font-weight:800' : ''}>
+      <${Check} on=${!!x.done} onClick=${() => act.saveStep(x.id, { done: !x.done, doneAt: x.done ? null : new Date().toISOString() })} label=${x.label} />
+      ${editing === x.id
+        ? html`<input class="input grow" value=${label} onInput=${(e) => setLabel(e.target.value)} onKeyDown=${(e) => e.key === 'Enter' && save()} onBlur=${save} autofocus />`
+        : html`<span class="grow" style=${x.done ? 'text-decoration:line-through;color:var(--ink-3)' : ''} onClick=${() => { setEditing(x.id); setLabel(x.label); }}>${x.label}</span>`}
+      ${x === current ? html`<span class="chip sage">En cours</span>` : null}
+      <button class="icon-btn" style="width:34px;height:34px;box-shadow:none" onClick=${() => act.deleteStep(x.id)} aria-label=${`Supprimer « ${x.label} »`}><${Icon} name="close" size=${15} /></button>
+    </div>`)}
+    ${!steps.length || !current ? html`<div class="small muted" style="margin:6px 0">${steps.length ? 'Toutes les étapes sont faites. Bravo !' : 'Aucune étape.'}</div>` : null}
+    <div class="row" style="margin-top:10px">
+      <input class="input grow" placeholder="Ajouter une étape" value=${adding} onInput=${(e) => setAdding(e.target.value)}
+        onKeyDown=${(e) => { if (e.key === 'Enter' && adding.trim()) { act.addStep(adding.trim()); setAdding(''); } }} />
+      <button class="btn small" disabled=${!adding.trim()} onClick=${() => { act.addStep(adding.trim()); setAdding(''); }} aria-label="Ajouter l’étape"><${Icon} name="plus" size=${18} /></button>
+    </div>
+    <p class="small muted" style="margin-top:10px">Touche une étape pour la modifier. L’appli passera toute seule en mode clientes dès ta première vraie cliente.</p>
   </div>`;
 }
 
@@ -141,10 +174,12 @@ function App() {
   const S = useMemo(() => derive(store.items), [store.items]);
   const settings = mergeSettings(S.settings);
   useEffect(() => {
-    // Première utilisation : rien n'est généré avant aujourd'hui
-    if (authed && store.status.lastSync !== undefined && !store.items.settings?.main && (store.demo || store.status.lastSync)) {
-      store.put('settings', 'main', { trackingStart: today });
-    }
+    // Mise à jour de la structure des données (sauvegarde d'abord), seulement après un chargement complet
+    if (!authed || migrating || !(store.demo || store.status.lastSync)) return;
+    const writes = migrate(store.items, today);
+    if (!writes.length) return;
+    migrating = true;
+    (async () => { for (const w of writes) await store.put(w.kind, w.id, w.data); })().finally(() => { migrating = false; });
   }, [authed, store.status.lastSync]);
 
   const all = useMemo(() => computeAll(S, today, { monthsAhead: 3 }), [S, today]);
@@ -186,6 +221,15 @@ function App() {
       }
       await store.put('invoice', inv.key, next);
     },
+    async snooze(t) {
+      const st = S.taskState[t.stateKey] || {};
+      const tomorrow = addDays(today, 1);
+      await store.put('task', t.stateKey, { ...st, snoozedUntil: tomorrow, title: t.title, clientId: t.clientId || null });
+      say('C’est noté pour demain');
+    },
+    async saveStep(id, patch) { const cur = S.launch.find((x) => x.id === id) || {}; await store.put('launch', id, { ...cur, id: undefined, ...patch }); },
+    async addStep(label) { const order = Math.max(0, ...S.launch.map((x) => x.order || 0)) + 1; await store.put('launch', uid(), { label, order, done: false }); },
+    async deleteStep(id) { await store.remove('launch', id); },
     openClient(id) { setTab('clients'); setClientId(id); setSettingsOpen(false); },
     editManual(id) { setManual(id === null ? null : S.manualTasks.find((m) => m.id === id)); },
     async saveClient(c) { await store.put('client', c.id, { ...c, id: undefined }); },
