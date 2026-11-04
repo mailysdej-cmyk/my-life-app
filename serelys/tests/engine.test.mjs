@@ -9,7 +9,7 @@ const TODAY = '2026-10-19';
 
 function baseState() {
   return {
-    settings: { trackingStart: '2026-10-19', aeCreated: true, aeCreationDate: '2026-09-01' },
+    settings: { trackingStart: '2026-10-19', aeCreated: true, aeCreationDate: '2026-09-01', prospection: { enabled: false } },
     clients: [
       { id: 'A', name: 'Crèche Test Essentiel', plan: 'essentiel', style: 'classique', createdAt: TODAY,
         discoveryDate: '2026-10-20T10:00', quoteAccepted: '2026-10-22', signatureVisioDate: '2026-10-24T14:00', contractSignedDate: '2026-10-25',
@@ -224,7 +224,7 @@ test('Notifications : résumé à 8 h, rappels seulement s’il reste des tâche
   const s = baseState();
   const sum = buildNotification(s, '2026-11-05', 'summary');
   assert.match(sum.title, /jeudi 5 novembre/);
-  assert.match(sum.body, /^Aujourd’hui :\n• /);
+  assert.match(sum.body, /^Ma fiche du jour : \d+ tâches(, dont \d+ en retard)?\n• /);
   const rem = buildNotification(s, '2026-11-05', 'reminder');
   assert.ok(rem);
   // Tout coché ce jour-là, rien en retard → pas de rappel

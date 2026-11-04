@@ -50,6 +50,7 @@ export function makeContext(state, today) {
     invoiceState: state.invoiceState || {},
     prospects: (state.prospects || []).filter((p) => !p.deleted),
     manualTasks: (state.manualTasks || []).filter((t) => !t.deleted),
+    recurring: (state.recurring || []).filter((r) => !r.deleted && !r.disabled),
   };
 }
 
@@ -347,7 +348,8 @@ function monthlyTasks(c, ctx, fromYm, toYm) {
       const date = dateIn(m, r.day);
       if (date < start || (d.end && date > d.end)) continue;
       const key = `c:${c.id}:${r.id}:${m}`;
-      const t = makeTask({ key, clientId: c.id, date, due: r.dueDay ? dateIn(m, r.dueDay) : null, title: fill(r.title, vars), rule: r.id, month: m,
+      const due = r.dueNextMonthDay ? dateIn(addMonthsYm(m, 1), r.dueNextMonthDay) : r.dueDay ? dateIn(m, r.dueDay) : null;
+      const t = makeTask({ key, clientId: c.id, date, due, title: fill(r.title, vars), rule: r.id, month: m,
         note: r.note ? [fill(r.note, vars)] : null });
       if (r.id === 'moteurs') t.items = clientMoteurs(c, config, date).map((x, i) => ({ id: `m${i}`, label: x }));
       if (r.id === 'livraison') {
@@ -524,6 +526,122 @@ function prospectTasks(ctx) {
   return out;
 }
 
+// ---------------------------------------------------------------- Mes tâches récurrentes
+
+const isoWeekday = (d) => ((weekday(d) + 6) % 7) + 1; // 1 = lundi … 7 = dimanche
+export const WEEKDAYS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+
+// Dates d'une fréquence entre from et to. freq.type : daily | weekdays | monthly | interval | once.
+export function recurringDates(freq = {}, from, to) {
+  const out = [];
+  const inRange = (d) => d >= from && d <= to;
+  if (freq.type === 'daily' || freq.type === 'weekdays') {
+    for (let d = from; d <= to; d = addDays(d, 1)) {
+      if (freq.type === 'daily' || (freq.weekdays || []).includes(isoWeekday(d))) out.push({ date: d });
+    }
+  } else if (freq.type === 'monthly') {
+    for (const m of monthsBetween(addMonthsYm(ym(from), -1), ym(to))) {
+      if (freq.rangeFrom) {
+        const date = dateIn(m, freq.rangeFrom);
+        const toDay = freq.rangeTo || freq.rangeFrom;
+        const due = toDay >= freq.rangeFrom ? dateIn(m, toDay) : dateIn(addMonthsYm(m, 1), toDay);
+        if (due >= from && date <= to) out.push({ date, due: due !== date ? due : null });
+      } else {
+        for (const md of freq.monthDays || []) { const date = dateIn(m, md); if (inRange(date)) out.push({ date }); }
+      }
+    }
+  } else if (freq.type === 'interval' && isDate(freq.start)) {
+    const step = Math.max(1, Number(freq.every) || 1) * (freq.unit === 'weeks' ? 7 : 1);
+    for (let d = day(freq.start); d <= to; d = addDays(d, step)) if (d >= from) out.push({ date: d });
+  } else if (freq.type === 'once' && isDate(freq.date) && inRange(day(freq.date))) {
+    out.push({ date: day(freq.date) });
+  }
+  return out;
+}
+
+export function describeFreq(freq = {}) {
+  const days = (l) => l.map((x) => (x === 1 ? '1er' : x)).join(', ');
+  switch (freq.type) {
+    case 'daily': return 'Tous les jours';
+    case 'weekdays': return (freq.weekdays || []).length ? `Le ${[...freq.weekdays].sort().map((x) => WEEKDAYS[x - 1]).join(', ')}` : 'Certains jours';
+    case 'monthly': return freq.rangeFrom ? `Chaque mois, du ${days([freq.rangeFrom])} au ${days([freq.rangeTo || freq.rangeFrom])}` : `Chaque mois, le ${days(freq.monthDays || [])}`;
+    case 'interval': return `Tous les ${Number(freq.every) > 1 ? `${freq.every} ` : ''}${freq.unit === 'weeks' ? 'semaines' : 'jours'}${isDate(freq.start) ? ` (à partir du ${fmtShort(freq.start)})` : ''}`;
+    case 'once': return isDate(freq.date) ? `Une fois, le ${fmtDate(freq.date)}` : 'Une fois';
+    default: return '';
+  }
+}
+
+function recurringTasks(ctx, fromYm, toYm) {
+  const out = [];
+  const from = firstOf(fromYm); const to = lastOf(toYm);
+  for (const r of ctx.recurring) {
+    const occ = recurringDates(r.freq, from, to);
+    const note = r.note ? [r.note] : null;
+    if (r.scope === 'clients') {
+      for (const c of ctx.clients) {
+        if (r.plans?.length && !r.plans.includes(c.plan)) continue;
+        const d = clientDates(c);
+        if (!d.serviceStart) continue;
+        const n = crecheName(c.name);
+        const title = r.title.includes('{creche}') ? fill(r.title, { creche: n }) : `${r.title} pour ${n}`;
+        for (const o of occ) {
+          if (o.date < d.serviceStart || (d.end && o.date > d.end)) continue;
+          out.push(makeTask({ key: `r:${r.id}:${c.id}:${o.date}`, clientId: c.id, date: o.date, due: o.due || null, title, note, link: r.link || null, recurringId: r.id }));
+        }
+      }
+    } else {
+      if (r.clientsOnly && ctx.mode !== 'clientes') continue;
+      for (const o of occ) out.push(makeTask({ key: `r:${r.id}:${o.date}`, mine: true, custom: true, date: o.date, due: o.due || null, title: r.title, note, link: r.link || null, recurringId: r.id }));
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- Prospection : X mails par semaine
+
+export function prospectionSettings(settings) {
+  return { enabled: true, goal: 25, mode: 'quotidien', blocDay: 1, ...(settings.prospection || {}) };
+}
+
+// Prévu chaque jour ouvré de la semaine (lundi = 0 … vendredi = 4)
+function plannedMails(ps) {
+  const goal = Math.max(0, Number(ps.goal) || 0);
+  if (ps.mode === 'bloc') return [0, 1, 2, 3, 4].map((i) => (i + 1 === Number(ps.blocDay) ? goal : 0));
+  return [0, 1, 2, 3, 4].map((i) => Math.floor(goal / 5) + (i < goal % 5 ? 1 : 0));
+}
+
+export function weekMails(ctx, d) {
+  const mon = mondayOf(d);
+  let sent = 0;
+  for (let i = 0; i < 7; i++) sent += Number(ctx.taskState[`pm:${addDays(mon, i)}`]?.sent) || 0;
+  const ps = prospectionSettings(ctx.settings);
+  return { sent, goal: Number(ps.goal) || 0, missing: Math.max(0, (Number(ps.goal) || 0) - sent), enabled: ps.enabled };
+}
+
+function prospectionTasks(ctx, weeks = 4) {
+  const ps = prospectionSettings(ctx.settings);
+  if (!ps.enabled) return [];
+  const out = [];
+  const planned = plannedMails(ps);
+  for (let w = 0; w < weeks; w++) {
+    const mon = addDays(mondayOf(ctx.today), 7 * w);
+    let cumPlanned = 0; let sentBefore = 0;
+    for (let i = 0; i < 5; i++) {
+      const d = addDays(mon, i);
+      cumPlanned += planned[i];
+      const sent = Number(ctx.taskState[`pm:${d}`]?.sent) || 0;
+      // Aujourd'hui : ce qui était prévu jusqu'ici dans la semaine, moins ce qui est déjà envoyé (le reste est reporté)
+      const target = d === ctx.today ? Math.max(0, cumPlanned - sentBefore) : planned[i];
+      sentBefore += sent;
+      if (target <= 0 && sent <= 0) continue;
+      out.push(makeTask({ key: `pm:${d}`, kind: 'prosp', prosp: true, mine: true, noCarry: true, date: d, target: Math.max(target, sent), sent,
+        title: `Prospection : ${target} mail${target > 1 ? 's' : ''}`, link: ps.url || ctx.settings.libraryUrl || null,
+        note: [ps.mode === 'bloc' ? `Objectif : ${ps.goal} mails cette semaine, en un bloc.` : `Objectif : ${ps.goal} mails cette semaine, ${Math.round(ps.goal / 5)} par jour.`] }));
+    }
+  }
+  return out;
+}
+
 // Toutes les tâches, avec leur état. Options : horizon en mois après aujourd'hui.
 export function computeAll(state, today, { monthsAhead = 3 } = {}) {
   const ctx = makeContext(state, today);
@@ -535,13 +653,15 @@ export function computeAll(state, today, { monthsAhead = 3 } = {}) {
   for (const c of ctx.clients) {
     tasks.push(...onboardingTasks(c, ctx), ...monthlyTasks(c, ctx, fromYm, toYm), ...dateLinkedTasks(c, ctx));
   }
-  tasks.push(...invoiceTasks(invoices, ctx), ...myTasks(ctx, invoices, fromYm, toYm), ...prospectTasks(ctx));
+  tasks.push(...invoiceTasks(invoices, ctx), ...myTasks(ctx, invoices, fromYm, toYm), ...prospectTasks(ctx),
+    ...recurringTasks(ctx, fromYm, toYm), ...prospectionTasks(ctx));
   for (const m of ctx.manualTasks) {
     if (!isDate(m.date)) continue;
     tasks.push(makeTask({ key: `m:${m.id}`, manualId: m.id, clientId: m.clientId || null, date: day(m.date), time: timeOf(m.date), title: m.title, manual: true, notes: m.notes }));
   }
   const horizon = lastOf(toYm);
   tasks = tasks.filter((t) => (t.due || t.date) >= trackingStart && t.date <= horizon);
+  planFiches(tasks, ctx);
   for (const t of tasks) {
     const st = ctx.taskState[t.stateKey] || {};
     t.state = st;
@@ -550,18 +670,22 @@ export function computeAll(state, today, { monthsAhead = 3 } = {}) {
     t.done = !!(st.done || t.autoDone || (t.question && st.answer) || (t.items?.length && itemsDone));
     t.doneAt = st.doneAt || null;
     // « Demain » : la tâche est reportée, sans passer en retard
-    if (!t.done && isDate(st.snoozedUntil) && day(st.snoozedUntil) > t.date) {
+    if (t.prosp) t.done = t.target > 0 && t.sent >= t.target;
+    if (!t.done && isDate(st.snoozedUntil) && day(st.snoozedUntil) > t.plan) {
       t.snoozedUntil = day(st.snoozedUntil);
-      t.plannedDate = t.date;
+      t.plannedDate = t.plan;
       t.date = t.snoozedUntil;
+      t.plan = t.snoozedUntil;
       if (t.due && t.due < t.date) t.due = t.date;
     }
     t.end = t.due || t.date;
     t.legalSoon = !!(t.legal && !t.done && t.date <= today && diffDays(today, t.end) <= ctx.config.legalNoticeDays);
-    t.late = !t.done && t.end < today;
+    // Pas cochée le jour prévu → sur la fiche du lendemain, « en retard »
+    t.late = !t.done && !t.noCarry && t.plan < today;
+    if (t.noCarry && !t.done && t.plan < today) t.hidden = true;
     if (t.daily && !t.done && t.date < today) t.hidden = true;
-    t.today = !t.done && (t.date === today || t.due === today);
-    t.ongoing = !t.done && t.date < today && t.due && t.due > today;
+    t.today = !t.done && t.plan === today;
+    t.ongoing = false;
     if (t.clientId) t.client = ctx.byId[t.clientId];
   }
   // Les tâches qui partagent un même état (une tâche et ses rappels) : une seule est affichée,
@@ -578,7 +702,47 @@ export function computeAll(state, today, { monthsAhead = 3 } = {}) {
   return { ctx, tasks, invoices, mode: ctx.mode, launch: ctx.launch };
 }
 
+function planFiches(tasks, ctx) {
+  const notice = ctx.config.legalNoticeDays;
+  const spread = [];
+  const load = {};
+  for (const t of tasks) {
+    const isRange = t.due && t.due > t.date;
+    if (isRange && t.clientId && t.stateKey === t.key && !t.question) { spread.push(t); continue; }
+    t.plan = isRange && t.legal && t.stateKey === t.key ? maxD(t.date, addDays(t.due, -notice)) : t.date;
+    if (!t.daily) load[t.plan] = (load[t.plan] || 0) + 1;
+  }
+  spread.sort((a, b) => a.due.localeCompare(b.due) || a.date.localeCompare(b.date) || (ctx.byId[a.clientId]?.name || '').localeCompare(ctx.byId[b.clientId]?.name || '') || a.key.localeCompare(b.key));
+  for (const t of spread) {
+    const days = [];
+    for (let d = t.date; d <= t.due; d = addDays(d, 1)) days.push(d);
+    const work = days.filter((d) => isoWeekday(d) <= 5);
+    const pool = work.length ? work : days;
+    let best = pool[0];
+    for (const d of pool) if ((load[d] || 0) < (load[best] || 0)) best = d;
+    t.plan = best;
+    load[best] = (load[best] || 0) + 1;
+  }
+}
+
 // ---------------------------------------------------------------- Vues
+
+// La fiche d'un jour : tout ce qui est prévu ce jour-là (+ le retard, si c'est aujourd'hui), dans l'ordre.
+export function ficheView(all, d, today) {
+  const vis = all.tasks.filter((t) => !t.hidden);
+  const late = d === today ? vis.filter((t) => t.late) : [];
+  // Aujourd'hui : aussi ce que j'ai rattrapé (prévu un jour d'avant, coché aujourd'hui)
+  const planned = vis.filter((t) => (t.plan === d && !(d === today && t.late))
+    || (d === today && t.done && t.plan < d && t.doneAt && day(t.doneAt) === today));
+  const rank = (t) => (t.time ? 1 : t.prosp ? 3 : t.due && t.due === d ? 2 : 4);
+  const sortKey = (t) => `${t.done ? 1 : 0}${rank(t)}${t.time || ''}${t.client?.name || 'zz'}${t.title}`;
+  const items = [...planned].sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+  // En retard : d'abord les échéances légales encore tenables, puis du plus ancien au plus récent
+  const urgent = (t) => (t.legal && t.due && t.due >= today ? 0 : 1);
+  late.sort((a, b) => urgent(a) - urgent(b) || a.plan.localeCompare(b.plan));
+  const all2 = [...late, ...items];
+  return { late, items, total: all2.length, done: all2.filter((t) => t.done).length, remaining: all2.filter((t) => !t.done) };
+}
 
 export function todayView(all, today) {
   const sunday = addDays(mondayOf(today), 6);
@@ -586,9 +750,9 @@ export function todayView(all, today) {
   const open = all.tasks.filter((t) => !t.done && !t.hidden);
   return {
     late: open.filter((t) => t.late),
-    today: open.filter((t) => !t.late && (t.date === today || t.due === today)),
-    ongoing: open.filter((t) => t.ongoing),
-    week: open.filter((t) => t.date > today && t.date <= weekEnd && !t.daily),
+    today: open.filter((t) => !t.late && t.plan === today),
+    ongoing: [],
+    week: open.filter((t) => t.plan > today && t.plan <= weekEnd && !t.daily),
     doneToday: all.tasks.filter((t) => t.done && t.doneAt && day(t.doneAt) === today),
   };
 }
@@ -646,7 +810,7 @@ export function moneySummary(all, today) {
 // l'entreprise créée. L'étape en cours de la checklist est ajoutée au résumé du matin.
 export function notifiable(t, ctx) {
   if (t.done || t.hidden) return false;
-  if (ctx.mode === 'clientes') return true;
+  if (ctx.mode === 'clientes' || t.prosp || t.custom) return true;
   if (t.client) return !!t.client.test;
   if (t.manual) return true;
   if (t.mine) return !!t.legal && ctx.entrepriseCreated;
@@ -656,23 +820,24 @@ export function notifiable(t, ctx) {
 const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
 const bullets = (tasks, max = 4) => tasks.slice(0, max).map((t) => `• ${t.title}`).concat(tasks.length > max ? [`• et ${tasks.length - max} autre${tasks.length - max > 1 ? 's' : ''}`] : []);
 
-// Une seule notification par créneau. kind : 'summary' (8 h, avec la semaine le lundi si weekly)
-// ou 'reminder' (10 h / 12 h). Renvoie null s'il n'y a rien à faire.
-export function buildNotification(state, today, kind, { weekly = false } = {}) {
+// Une seule notification par créneau. kind : 'summary' (8 h : ma fiche du jour, + la semaine le lundi)
+// ou 'reminder' (10 h / 12 h : ce qu'il reste à cocher ; le vendredi à 12 h, les mails de prospection
+// qui manquent pour la semaine si weekCheck). Renvoie null s'il n'y a rien à dire.
+export function buildNotification(state, today, kind, { weekly = false, weekCheck = false } = {}) {
   const all = computeAll(state, today, { monthsAhead: 2 });
   const { ctx } = all;
-  const open = all.tasks.filter((t) => notifiable(t, ctx));
-  const late = open.filter((t) => t.late);
-  const todays = open.filter((t) => !t.late && (t.date === today || t.due === today || t.legalSoon));
+  const fiche = ficheView(all, today, today);
+  const late = fiche.late.filter((t) => !t.done && notifiable(t, ctx));
+  const todays = fiche.items.filter((t) => !t.done && notifiable(t, ctx));
   const lines = [];
   if (kind === 'summary') {
     const step = ctx.mode === 'lancement' ? currentLaunchStep(ctx.launch) : null;
     if (step) lines.push(`Étape en cours : ${step.label}`);
-    if (todays.length) lines.push(`Aujourd’hui :`, ...bullets(todays));
-    if (late.length) lines.push(`En retard : ${plural(late.length, 'tâche')}`);
+    const n = todays.length + late.length;
+    if (n) lines.push(`Ma fiche du jour : ${plural(n, 'tâche')}${late.length ? `, dont ${late.length} en retard` : ''}`, ...bullets([...late, ...todays]));
     if (weekly) {
       const end = addDays(today, 6);
-      const week = open.filter((t) => !t.daily && t.date > today && t.date <= end);
+      const week = all.tasks.filter((t) => notifiable(t, ctx) && !t.daily && !t.prosp && t.plan > today && t.plan <= end);
       if (week.length) {
         const visios = week.filter((t) => t.kind === 'event').length;
         const invoices = week.filter((t) => t.kind === 'invoice').length;
@@ -680,13 +845,17 @@ export function buildNotification(state, today, kind, { weekly = false } = {}) {
       }
     }
     if (!lines.length) return null;
-    return { title: `Serelys · ${fmtDate(today)}`, body: lines.join('\n'), tag: `summary-${today}`, count: todays.length + late.length };
+    return { title: `Serelys · ${fmtDate(today)}`, body: lines.join('\n'), tag: `summary-${today}`, count: n };
   }
   if (kind === 'reminder') {
-    if (!todays.length && !late.length) return null;
-    if (todays.length) lines.push(`Il reste ${plural(todays.length, 'chose')} à faire aujourd’hui :`, ...bullets(todays, 3));
-    if (late.length) lines.push(`En retard :`, ...bullets(late, todays.length ? 2 : 3));
-    return { title: 'Serelys · petit rappel', body: lines.join('\n'), tag: `reminder-${today}`, count: todays.length + late.length };
+    const rest = [...late, ...todays];
+    if (rest.length) lines.push(`Il reste ${plural(rest.length, 'chose')} à cocher :`, ...bullets(rest, 4));
+    if (weekCheck) {
+      const w = weekMails(ctx, today);
+      if (w.enabled && w.missing > 0) lines.push(`Prospection : il manque ${plural(w.missing, 'mail')} pour arriver à ${w.goal} cette semaine.`);
+    }
+    if (!lines.length) return null;
+    return { title: 'Serelys · petit rappel', body: lines.join('\n'), tag: `reminder-${today}`, count: rest.length };
   }
   return null;
 }

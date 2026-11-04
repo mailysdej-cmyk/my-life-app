@@ -8,7 +8,7 @@ const TODAY = '2026-11-02'; // lundi
 const testClient = { id: 'T', name: 'Les Essais', plan: 'confort', test: true, startDate: '2026-11-01', createdAt: '2026-10-01' };
 const realClient = { id: 'R', name: 'Crèche Les Lucioles', plan: 'premium', startDate: '2026-11-01', createdAt: '2026-10-01' };
 const base = (extra = {}) => ({
-  settings: { trackingStart: '2026-10-01', aeCreationDate: '2026-10-01', launchSeeded: true },
+  settings: { trackingStart: '2026-10-01', aeCreationDate: '2026-10-01', launchSeeded: true, prospection: { enabled: false } },
   clients: [], prospects: [], manualTasks: [], taskState: {}, invoiceState: {},
   launch: [
     { id: 'site', label: 'Finir le site', order: 1, done: true },
@@ -50,7 +50,7 @@ test('Mode lancement : notifications seulement de l’étape en cours (+ cliente
   assert.equal(n.body, 'Étape en cours : Faire les tests avec Mélodie', 'ni semaine, ni tâches d’entrepreneuse');
   assert.equal(buildNotification(s, TODAY, 'reminder'), null, 'pas de rappel à 10 h / 12 h pour l’étape');
   n = buildNotification(base({ clients: [testClient] }), '2026-11-05', 'summary');
-  assert.match(n.body, /Étape en cours : Faire les tests avec Mélodie\nAujourd’hui :\n• Vérifier si j’ai reçu les infos du mois de la crèche Les Essais/);
+  assert.match(n.body, /Étape en cours : Faire les tests avec Mélodie\nMa fiche du jour : \d+ tâches?(, dont \d+ en retard)?\n(• .*\n)*• Vérifier si j’ai reçu les infos du mois de la crèche Les Essais/);
 });
 
 test('Mode lancement : échéances légales et paiements, après « Créer l’entreprise » seulement', () => {

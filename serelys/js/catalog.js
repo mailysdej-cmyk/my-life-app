@@ -52,7 +52,7 @@ export const DEFAULT_CONFIG = {
     { id: 'formation-besoin', service: 'formation', day: 20, dueDay: 25, title: 'Vérifier si {creche} a signalé un besoin de formation', note: 'Si oui, changer la ligne de {mois1} dans son tableau « Idées de formation » avant le 25. Le Moteur formation envoie l’idée du mois suivant le 28.' },
     { id: 'newsletter-annee', service: 'newsletter', day: 1, months: [12], title: 'Remplir l’onglet Newsletter de {creche} pour l’an prochain', note: 'Les 12 mois de l’année suivante.' },
     { id: 'newsletter-prep', service: 'newsletter', day: 20, dueDay: 24, title: 'Préparer la newsletter de {mois1} pour {creche}', note: 'Déposer le lien dans son tableau : le moteur prévient ensuite la directrice.' },
-    { id: 'livraison', service: null, day: 29, title: 'Livrer le travail du mois à {creche}' },
+    { id: 'livraison', service: null, day: 29, dueNextMonthDay: 1, title: 'Livrer le travail du mois à {creche}', note: 'Du 29 au 1er.' },
   ],
   baseDeliverables: ['Récapitulatif du mois (ce que les moteurs ont fait)'],
 

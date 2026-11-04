@@ -16,6 +16,9 @@ export function dueSlots(now, times, log = {}) {
   // Le lundi, le résumé de la semaine est dans la même notification que celui du jour
   for (const x of out) if (x.kind === 'summary') x.weekly = now.weekday === 1;
   for (const t of times.reminders || []) want('reminder', t);
+  // Le vendredi au dernier rappel (12 h) : les mails de prospection qui manquent pour la semaine
+  const lastReminder = (times.reminders || []).slice(-1)[0];
+  for (const x of out) if (x.kind === 'reminder') x.weekCheck = now.weekday === 5 && x.slot === lastReminder;
   return out;
 }
 
