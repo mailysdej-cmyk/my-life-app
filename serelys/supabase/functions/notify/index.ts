@@ -61,6 +61,7 @@ async function loadItems(userId: string) {
       clients: vals('client'), prospects: vals('prospect'), manualTasks: vals('manual'),
       taskState: items.task || {}, invoiceState: items.invoice || {}, settings: items.settings?.main || {},
       launch: vals('launch'),
+      recurring: vals('recurring'),
     },
   };
 }
@@ -102,7 +103,7 @@ async function runForUser(userId: string, nowDate = new Date()) {
   const report: string[] = [];
 
   for (const slot of dueSlots(now, settings.notifTimes, log)) {
-    const n = buildNotification(state, now.date, slot.kind, { weekly: !!slot.weekly });
+    const n = buildNotification(state, now.date, slot.kind, { weekly: !!slot.weekly, weekCheck: !!slot.weekCheck });
     if (n) { const r = await sendTo(userId, items, { ...n, url: './' }); report.push(`${slot.logKey}: ${r.sent}`); }
     else report.push(`${slot.logKey}: rien à rappeler`);
     log = markSent(log, now, [slot.logKey]);

@@ -67,6 +67,8 @@ export function ProspectsScreen({ S, all, today, act, openSettings }) {
 
   return html`<div class="screen">
     <div class="topbar"><h1>Prospection</h1><button class="icon-btn" onClick=${openSettings} aria-label="Réglages"><${Icon} name="gear" /></button></div>
+    ${(all.ctx.settings.prospection?.url || all.ctx.settings.libraryUrl) ? html`<a class="btn blue block" style="margin-bottom:12px" href=${all.ctx.settings.prospection?.url || all.ctx.settings.libraryUrl} target="_blank" rel="noopener"><${Icon} name="link" /> Ouvrir Ma prospection (Bibliothèque)</a>`
+      : html`<button class="btn ghost block small" style="margin-bottom:12px" onClick=${openSettings}>Ajouter le lien de ma Bibliothèque (Réglages › Prospection)</button>`}
     <div class="row" style="margin-bottom:14px">
       <button class="btn primary grow" onClick=${() => setEdit(null)}><${Icon} name="plus" /> Ajouter une crèche</button>
       <label class="btn" aria-label="Importer un fichier CSV"><${Icon} name="upload" /> CSV

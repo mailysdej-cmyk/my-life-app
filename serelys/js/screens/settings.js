@@ -1,14 +1,18 @@
 import { html, useState, useEffect } from '../../vendor/preact-htm.js';
 import { Icon, Field, Input, TextLine, Seg, Switch, Select, euro, fmtDate } from '../ui.js';
 import { DEFAULT_CONFIG } from '../catalog.js';
+import { describeFreq, prospectionSettings, WEEKDAYS } from '../engine.js';
+import { Sheet, PrivacyHint } from '../ui.js';
 import { enablePush, disablePush, isIOS, isStandalone, pushSupported, thisDeviceId } from '../push.js';
 import { day } from '../dates.js';
 
-export function SettingsScreen({ S, settings, all, today, act, onBack }) {
-  const [sec, setSec] = useState(null);
+export function SettingsScreen({ S, settings, all, today, act, onBack, initial = null }) {
+  const [sec, setSec] = useState(initial);
   const save = act.saveSettings;
   const S_ = { S, settings, all, today, act, save };
   const sections = [
+    ['recurring', 'calendar', 'Mes tâches récurrentes', 'Ajouter, modifier, choisir la fréquence'],
+    ['prospection', 'prospect', 'Prospection', `${prospectionSettings(settings).goal} mails par semaine · ${prospectionSettings(settings).mode === 'bloc' ? 'en un bloc' : '5 par jour'}`],
     ['notif', 'bell', 'Notifications', 'Activer, tester, heures'],
     ['activity', 'leaf', 'Mon activité', 'SIRET, ACRE, assurance, dates'],
     ['money', 'euro', 'Urssaf, taux et seuils', `${settings.urssafPeriod}, ${String(settings.urssafRate).replace('.', ',')} %, TVA ${euro(settings.tvaThreshold)}`],
@@ -16,7 +20,7 @@ export function SettingsScreen({ S, settings, all, today, act, onBack }) {
     ['backup', 'download', 'Sauvegarde', 'Automatique en ligne · copie de secours'],
     ['security', 'lock', 'Sécurité et compte', 'Double authentification, déconnexion'],
   ];
-  const Cur = { notif: Notifications, activity: Activity, money: MoneySettings, rules: Rules, backup: Backup, security: Security }[sec];
+  const Cur = { recurring: Recurring, prospection: Prospection, notif: Notifications, activity: Activity, money: MoneySettings, rules: Rules, backup: Backup, security: Security }[sec];
   return html`<div class="screen">
     <div class="topbar"><button class="icon-btn" onClick=${() => (sec ? setSec(null) : onBack())} aria-label="Retour"><${Icon} name="back" /></button>
       <h1 class="grow">${sec ? sections.find((s) => s[0] === sec)[2] : 'Réglages'}</h1></div>
@@ -223,4 +227,90 @@ function Security({ act }) {
     ${err ? html`<div class="warn" style="margin-top:10px">${err}</div>` : null}
   </div>
   <div class="card"><button class="btn block" onClick=${async () => { await act.store.signOut(); location.reload(); }}>Me déconnecter</button></div>`;
+}
+
+// ---------------------------------------------------------------- Mes tâches récurrentes
+
+const FREQ_TYPES = [['daily', 'Tous les jours'], ['weekdays', 'Certains jours'], ['monthly', 'Chaque mois'], ['interval', 'Tous les X'], ['once', 'Une fois']];
+const PLANS = [['essentiel', 'Essentiel'], ['confort', 'Confort'], ['premium', 'Premium']];
+
+function Recurring({ S, act, today }) {
+  const [edit, setEdit] = useState(undefined);
+  const list = [...S.recurring].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  return html`
+    <p class="small muted" style="margin:0 6px 14px">Ces tâches arrivent toutes seules sur mes fiches du jour. Les tâches automatiques de chaque cliente (factures, moteurs, livraison…) se règlent dans « Mes règles ».</p>
+    <button class="btn primary block" style="margin-bottom:16px" onClick=${() => setEdit(null)}><${Icon} name="plus" /> Ajouter une tâche récurrente</button>
+    ${list.length ? list.map((r) => html`<button class="card client-card flat" style="padding:14px 16px;margin-bottom:12px" onClick=${() => setEdit(r)}>
+      <div style="font-weight:800">${(r.title || '').replace('{creche}', '[la crèche]')}</div>
+      <div class="small muted" style="margin-top:4px">${describeFreq(r.freq)} · ${r.scope === 'clients' ? `pour chaque cliente${r.plans?.length && r.plans.length < 3 ? ` (${r.plans.map((x) => PLANS.find((p) => p[0] === x)?.[1]).join(', ')})` : ''}` : r.clientsOnly ? 'pour moi, seulement avec des clientes' : 'pour moi'}${r.disabled ? ' · en pause' : ''}</div>
+    </button>`) : html`<div class="empty">Aucune tâche récurrente.</div>`}
+    ${edit !== undefined ? html`<${RecurringSheet} r=${edit} today=${today} onClose=${() => setEdit(undefined)}
+      onDelete=${async () => { await act.store.remove('recurring', edit.id); setEdit(undefined); act.say('Tâche supprimée'); }}
+      onSave=${async (r) => { await act.store.put('recurring', edit?.id || act.uid(), { ...r, id: undefined }); setEdit(undefined); act.say('Enregistré'); }} />` : null}`;
+}
+
+function RecurringSheet({ r, today, onClose, onSave, onDelete }) {
+  const [v, setV] = useState({ title: '', scope: 'me', plans: ['essentiel', 'confort', 'premium'], clientsOnly: false, note: '', link: '', disabled: false, ...(r || {}),
+    freq: { type: 'weekdays', weekdays: [1], monthDays: [1], every: 2, unit: 'days', start: today, date: today, ...(r?.freq || {}) } });
+  const [daysText, setDaysText] = useState((v.freq.monthDays || []).join(', '));
+  const [range, setRange] = useState(!!v.freq.rangeFrom);
+  const set = (k) => (x) => setV({ ...v, [k]: x });
+  const setF = (k) => (x) => setV({ ...v, freq: { ...v.freq, [k]: x } });
+  const toggle = (list, x) => (list.includes(x) ? list.filter((y) => y !== x) : [...list, x]);
+  const f = v.freq;
+  const clean = () => {
+    const fr = { type: f.type };
+    if (f.type === 'weekdays') fr.weekdays = [...(f.weekdays || [])].sort();
+    if (f.type === 'monthly') {
+      if (range) { fr.rangeFrom = Number(f.rangeFrom) || 1; fr.rangeTo = Number(f.rangeTo) || fr.rangeFrom; }
+      else fr.monthDays = daysText.split(/[^0-9]+/).map(Number).filter((n) => n >= 1 && n <= 31);
+    }
+    if (f.type === 'interval') { fr.every = Math.max(1, Number(f.every) || 1); fr.unit = f.unit; fr.start = f.start || today; }
+    if (f.type === 'once') fr.date = f.date || today;
+    return { title: v.title.trim(), scope: v.scope, plans: v.scope === 'clients' ? v.plans : undefined, clientsOnly: v.scope === 'me' ? !!v.clientsOnly : undefined,
+      note: v.note.trim() || undefined, link: v.link.trim() || undefined, disabled: !!v.disabled, freq: fr, createdAt: r?.createdAt || new Date().toISOString() };
+  };
+  const ok = v.title.trim() && (f.type !== 'weekdays' || (f.weekdays || []).length) && (v.scope !== 'clients' || v.plans.length);
+  return html`<${Sheet} title=${r ? 'Modifier la tâche' : 'Nouvelle tâche récurrente'} onClose=${onClose}>
+    <${Field} label="Ce que je fais" hint=${v.scope === 'clients' ? 'Le nom de la crèche est ajouté tout seul (ou écris {creche} où tu veux le voir).' : null}>
+      <${Input} value=${v.title} onChange=${set('title')} placeholder="Ex. Faire le résumé de ma semaine" /></${Field}>
+    <${Field} label="Pour qui"><${Seg} value=${v.scope} onChange=${set('scope')} options=${[['me', 'Pour moi'], ['clients', 'Chaque cliente']]} /></${Field}>
+    ${v.scope === 'clients' ? html`<${Field} label="Forfaits concernés"><div class="row wrap" style="gap:6px">${PLANS.map(([k, l]) => html`
+      <button class=${`chip ${v.plans.includes(k) ? 'sage' : ''}`} onClick=${() => set('plans')(toggle(v.plans, k))} aria-pressed=${v.plans.includes(k)}>${l}</button>`)}</div></${Field}>
+      <p class="small muted" style="margin:-6px 4px 14px">Elle n’apparaît que quand j’ai des clientes.</p>`
+      : html`<${Switch} label="Seulement quand j’ai des clientes" value=${!!v.clientsOnly} onChange=${set('clientsOnly')} />`}
+    <${Field} label="Fréquence"><select class="input" value=${f.type} onChange=${(e) => setF('type')(e.target.value)}>${FREQ_TYPES.map(([k, l]) => html`<option value=${k} selected=${f.type === k}>${l}</option>`)}</select></${Field}>
+    ${f.type === 'weekdays' ? html`<div class="row wrap" style="gap:6px;margin-bottom:14px">${WEEKDAYS.map((w, i) => html`
+      <button class=${`chip ${(f.weekdays || []).includes(i + 1) ? 'sage' : ''}`} onClick=${() => setF('weekdays')(toggle(f.weekdays || [], i + 1))} aria-pressed=${(f.weekdays || []).includes(i + 1)}>${w}</button>`)}</div>` : null}
+    ${f.type === 'monthly' ? html`<${Field} label="Quand"><${Seg} value=${range ? 'range' : 'days'} onChange=${(x) => setRange(x === 'range')} options=${[['days', 'Date(s) fixe(s)'], ['range', 'Du … au …']]} /></${Field}>
+      ${range ? html`<div class="row"><div class="grow"><${Field} label="Du"><${Input} type="number" min="1" max="31" value=${f.rangeFrom || 1} onChange=${setF('rangeFrom')} /></${Field}></div>
+        <div class="grow"><${Field} label="Au"><${Input} type="number" min="1" max="31" value=${f.rangeTo || 5} onChange=${setF('rangeTo')} /></${Field}></div></div>
+        <p class="small muted" style="margin:-6px 4px 14px">Pour les clientes, le travail est réparti sur les jours de la plage. « Du 29 au 1 » va jusqu’au 1er du mois suivant.</p>`
+      : html`<${Field} label="Jour(s) du mois" hint="Ex. 1, 20"><${Input} value=${daysText} onChange=${setDaysText} /></${Field}>`}` : null}
+    ${f.type === 'interval' ? html`<div class="row"><div style="width:30%"><${Field} label="Tous les"><${Input} type="number" min="1" value=${f.every} onChange=${setF('every')} /></${Field}></div>
+      <div class="grow"><${Field} label=" "><${Seg} value=${f.unit} onChange=${setF('unit')} options=${[['days', 'jours'], ['weeks', 'semaines']]} /></${Field}></div></div>
+      <${Field} label="À partir du"><${Input} type="date" value=${f.start} onChange=${setF('start')} /></${Field}>` : null}
+    ${f.type === 'once' ? html`<${Field} label="Le"><${Input} type="date" value=${f.date} onChange=${setF('date')} /></${Field}>` : null}
+    <${Field} label="Détail (facultatif)"><textarea class="input" value=${v.note} onInput=${(e) => set('note')(e.target.value)}></textarea><${PrivacyHint} /></${Field}>
+    <${Field} label="Lien à ouvrir (facultatif)"><${Input} type="url" value=${v.link} onChange=${set('link')} placeholder="https://…" /></${Field}>
+    ${r ? html`<${Switch} label="Mettre en pause" value=${!!v.disabled} onChange=${set('disabled')} />` : null}
+    <button class="btn primary block" style="margin-top:8px" disabled=${!ok} onClick=${() => onSave(clean())}>Enregistrer</button>
+    ${r ? html`<button class="btn ghost block" style="margin-top:8px" onClick=${onDelete}>Supprimer cette tâche</button>` : null}
+  </${Sheet}>`;
+}
+
+// ---------------------------------------------------------------- Prospection
+
+function Prospection({ settings, save }) {
+  const ps = prospectionSettings(settings);
+  const set = (patch) => save({ prospection: { ...ps, ...patch } });
+  return html`<div class="card">
+    <${Switch} label="Prospection sur mes fiches du jour" value=${ps.enabled} onChange=${(v) => set({ enabled: v })} />
+    <${Field} label="Objectif de mails par semaine"><${Input} type="number" min="1" value=${ps.goal} onChange=${(v) => set({ goal: Math.max(1, Number(v) || 25) })} /></${Field}>
+    <${Field} label="Comment je les envoie"><${Seg} value=${ps.mode} onChange=${(v) => set({ mode: v })} options=${[['quotidien', '5 par jour'], ['bloc', 'Un jour « bloc »']]} /></${Field}>
+    ${ps.mode === 'bloc' ? html`<${Field} label="Le jour du bloc"><select class="input" value=${ps.blocDay} onChange=${(e) => set({ blocDay: Number(e.target.value) })}>${WEEKDAYS.slice(0, 5).map((w, i) => html`<option value=${i + 1} selected=${Number(ps.blocDay) === i + 1}>${w}</option>`)}</select></${Field}>` : null}
+    <p class="small muted" style="margin:-4px 4px 14px">Ce qui n’est pas fait est reporté au jour suivant de la même semaine. Le vendredi à 12 h, je te préviens s’il manque des mails.</p>
+    <${Field} label="Lien de « Ma prospection » (Bibliothèque Serelys)" hint="Ouvre ta Bibliothèque sur l’onglet « Ma prospection », puis copie l’adresse ici.">
+      <${TextLine} type="url" value=${ps.url || ''} onChange=${(v) => set({ url: v.trim() })} placeholder=${settings.libraryUrl || 'https://…'} /></${Field}>
+  </div>`;
 }

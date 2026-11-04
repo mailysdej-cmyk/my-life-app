@@ -117,7 +117,8 @@ export function TaskRow({ t, today, act, showClient = true, showDate = true }) {
   const canToggle = !t.autoDone && !t.question && !(t.blocked && !t.softBlock);
   const dateChip = () => {
     if (!showDate) return null;
-    if (t.late) return html`<span class="chip peach">En retard · ${fmtShort(t.end)}</span>`;
+    if (t.late) return html`<span class="chip peach">En retard · prévu le ${fmtShort(t.plan)}${t.due && t.due > t.plan ? `, à finir le ${fmtShort(t.due)}` : ''}</span>`;
+    if (t.due && t.due !== t.date && t.plan !== t.date) return html`<span class="chip">À finir le ${fmtShort(t.due)}</span>`;
     if (t.due && t.due !== t.date) return html`<span class="chip">${fmtShort(t.date)} → ${fmtShort(t.due)}</span>`;
     if (t.date !== today) return html`<span class="chip">${fmtDate(t.date)}</span>`;
     return null;
@@ -137,7 +138,15 @@ export function TaskRow({ t, today, act, showClient = true, showDate = true }) {
         ${t.done && t.doneAt ? html`<span class="chip sage">Fait le ${fmtShort(day(t.doneAt))}</span>` : null}
         ${t.snoozedUntil && !t.done ? html`<span class="chip blue">Reporté (prévu le ${fmtShort(t.plannedDate)})</span>` : null}
       </div>
-      ${!t.done && !t.question && act.snooze ? html`<div class="row" style="margin-top:12px" onClick=${(e) => e.stopPropagation()}>
+      ${t.prosp && act.setMails ? html`<div class="row wrap" style="margin-top:12px" onClick=${(e) => e.stopPropagation()}>
+        <span class="counter"><button class="btn small" onClick=${() => act.setMails(t, t.sent - 1)} aria-label="Un mail de moins">−</button>
+          <b>${t.sent}/${t.target}</b>
+          <button class="btn small" onClick=${() => act.setMails(t, t.sent + 1)} aria-label="Un mail de plus">+</button></span>
+        ${!t.done ? html`<button class="btn small primary" onClick=${() => act.setMails(t, t.target)}><${Icon} name="check" size=${16} stroke=${2.6} /> Fait</button>` : null}
+        ${t.link ? html`<a class="btn small ghost" href=${t.link} target="_blank" rel="noopener"><${Icon} name="link" size=${15} /> Ma prospection</a>` : null}
+      </div>` : null}
+      ${t.link && !t.prosp ? html`<div class="row" style="margin-top:10px" onClick=${(e) => e.stopPropagation()}><a class="btn small" href=${t.link} target="_blank" rel="noopener"><${Icon} name="link" size=${15} /> Ouvrir</a></div>` : null}
+      ${!t.done && !t.question && !t.prosp && act.snooze ? html`<div class="row" style="margin-top:12px" onClick=${(e) => e.stopPropagation()}>
         <button class="btn small primary" disabled=${!canToggle} onClick=${() => act.toggle(t)}><${Icon} name="check" size=${16} stroke=${2.6} /> Fait</button>
         ${t.daily || t.kind === 'event' || t.date > today ? null : html`<button class="btn small" onClick=${() => act.snooze(t)}>Demain</button>`}
       </div>` : null}

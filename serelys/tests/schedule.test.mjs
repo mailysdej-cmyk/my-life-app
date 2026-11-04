@@ -32,3 +32,10 @@ test('Visio : rappel 1 h avant, une seule fois', () => {
   const log = markEvents({}, { date: 'd' }, ['v1']);
   assert.equal(dueEvents({ date: 'd', time: '13:15' }, ev, log).length, 0);
 });
+
+test('Vendredi 12 h : vérification des mails de prospection de la semaine', () => {
+  const at = (date, time, weekday) => dueSlots({ date, time, weekday }, times).filter((x) => x.kind === 'reminder').map((x) => [x.slot, x.weekCheck]);
+  assert.deepEqual(at('2026-11-06', '12:00', 5), [['12:00', true]]);
+  assert.deepEqual(at('2026-11-06', '10:00', 5), [['10:00', false]]);
+  assert.deepEqual(at('2026-11-05', '12:00', 4), [['12:00', false]]);
+});

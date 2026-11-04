@@ -1,7 +1,7 @@
 import { html, render, useState, useEffect, useMemo } from '../vendor/preact-htm.js';
 import { createStore } from './store.js';
-import { computeAll, todayView, monthCycle, currentLaunchStep } from './engine.js';
-import { parisNow, fmtDate, day, diffDays, addDays } from './dates.js';
+import { computeAll, ficheView, monthCycle, currentLaunchStep, weekMails, prospectionSettings, WEEKDAYS } from './engine.js';
+import { parisNow, fmtDate, fmtShort, day, diffDays, addDays, mondayOf } from './dates.js';
 import { migrate } from './migrate.js';
 import { mergeSettings, CLIENT_COLORS } from './catalog.js';
 import { Icon, TaskRow, Sheet, Field, Input, Select, Toast, PrivacyHint, Check } from './ui.js';
@@ -28,6 +28,7 @@ function derive(items) {
     settings: items.settings?.main || {},
     cards: vals('card'),
     launch: vals('launch'),
+    recurring: vals('recurring'),
     push: vals('push'),
     system: items.system || {},
   };
@@ -77,28 +78,58 @@ function Login({ onDone }) {
 
 // ---------------------------------------------------------------- Aujourd'hui
 
+const DAY_SHORT = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+
+// Fiches du jour : une fiche par jour, construite toute seule. On peut ouvrir les autres jours à l'avance.
 function TodayScreen({ S, all, today, act, openSettings, banners }) {
-  const v = useMemo(() => todayView(all, today), [all, today]);
+  const [sel, setSel] = useState(today);
+  useEffect(() => setSel(today), [today]);
+  const monday = mondayOf(sel);
+  const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+  const fiche = useMemo(() => ficheView(all, sel, today), [all, sel, today]);
+  const count = (d) => ficheView(all, d, today).remaining.length;
+  const isToday = sel === today;
   const cyc = monthCycle(today);
-  const [showDone, setShowDone] = useState(false);
-  const sec = (title, list, empty) => html`<div class="section-title"><span>${title}</span>${list.length ? html`<span>${list.length}</span>` : null}</div>
-    ${list.length ? list.map((t) => html`<${TaskRow} key=${t.key} t=${t} today=${today} act=${act} />`) : empty ? html`<div class="empty">${empty}</div>` : null}`;
+  const wm = weekMails(all.ctx, sel);
+  const ps = prospectionSettings(all.ctx.settings);
+  const prospUrl = ps.url || all.ctx.settings.libraryUrl;
+  const row = (t) => html`<${TaskRow} key=${t.key} t=${t} today=${today} act=${act} />`;
   return html`<div class="screen">
-    <div class="topbar"><div><div class="sub">${fmtDate(today)}</div><h1>Aujourd’hui</h1></div>
+    <div class="topbar"><div><div class="sub">${fmtDate(today)}</div><h1>${isToday ? 'Aujourd’hui' : 'Ma semaine'}</h1></div>
       <button class="icon-btn" onClick=${openSettings} aria-label="Réglages"><${Icon} name="gear" /></button></div>
     ${banners}
-    ${all.mode === 'lancement' ? html`<${LaunchCard} steps=${all.launch} act=${act} />` : html`<div class="card">
+    <div class="card" style="padding:12px">
+      <div class="spread" style="margin-bottom:8px">
+        <button class="icon-btn" style="width:38px;height:38px" onClick=${() => setSel(addDays(monday, -7))} aria-label="Semaine précédente"><${Icon} name="back" size=${18} /></button>
+        <b class="small">Semaine du ${fmtShort(monday)}</b>
+        <button class="icon-btn" style="width:38px;height:38px;transform:scaleX(-1)" onClick=${() => setSel(addDays(monday, 7))} aria-label="Semaine suivante"><${Icon} name="back" size=${18} /></button>
+      </div>
+      <div class="days">${week.map((d, i) => { const n = count(d); return html`
+        <button class=${`dayb ${d === sel ? 'on' : ''} ${d === today ? 'now' : ''}`} onClick=${() => setSel(d)} aria-pressed=${d === sel} aria-label=${fmtDate(d)}>
+          <span>${DAY_SHORT[i]}</span><b>${Number(d.slice(8))}</b><em>${n || ''}</em></button>`; })}</div>
+      ${!week.includes(today) ? html`<button class="btn small ghost block" style="margin-top:8px" onClick=${() => setSel(today)}>Revenir à aujourd’hui</button>` : null}
+    </div>
+    ${isToday ? (all.mode === 'lancement' ? html`<${LaunchCard} steps=${all.launch} act=${act} />` : html`<div class="card">
       <h2><${Icon} name="leaf" size=${20} /> Où j’en suis ce mois-ci</h2>
       <div class="cycle">${cyc.phases.map((p) => html`<div class=${`ph ${cyc.phase === p.id ? 'on' : ''}`}>${p.label}<b>${p.range}</b></div>`)}</div>
       <div class="track" aria-label=${`Jour ${cyc.day} sur ${cyc.last}`}><span style=${`width:${(cyc.day / cyc.last) * 100}%`}></span></div>
       <div class="small muted" style="margin-top:8px">Jour ${cyc.day} sur ${cyc.last}</div>
-    </div>`}
-    ${v.late.length ? sec('En retard', v.late) : null}
-    ${sec('Aujourd’hui', v.today, v.late.length ? 'Rien d’autre de prévu aujourd’hui.' : 'Rien de prévu aujourd’hui. Profites-en !')}
-    ${v.ongoing.length ? sec('En cours (avec échéance)', v.ongoing) : null}
-    ${sec('Cette semaine', v.week, 'Rien d’autre cette semaine.')}
-    ${v.doneToday.length ? html`<div class="section-title"><button class="btn ghost small" onClick=${() => setShowDone(!showDone)}>${showDone ? 'Masquer' : 'Voir'} ce que j’ai fait aujourd’hui (${v.doneToday.length})</button></div>
-      ${showDone ? v.doneToday.map((t) => html`<${TaskRow} key=${t.key} t=${t} today=${today} act=${act} />`) : null}` : null}
+    </div>`) : null}
+    ${wm.enabled && sel >= mondayOf(today) && sel <= addDays(mondayOf(today), 6) ? html`<div class="card flat">
+      <div class="spread"><h2 style="margin:0"><${Icon} name="prospect" size=${20} /> Prospection</h2><b>${wm.sent}/${wm.goal} mails</b></div>
+      <div class="progress"><span style=${`width:${Math.min(100, wm.goal ? (wm.sent / wm.goal) * 100 : 0)}%`}></span></div>
+      <div class="small muted" style="margin-top:6px">${wm.missing ? `Il en manque ${wm.missing} cette semaine (${ps.mode === 'bloc' ? `en un bloc le ${WEEKDAYS[(ps.blocDay || 1) - 1]}` : '5 par jour'}).` : 'Objectif de la semaine atteint. Bravo !'}</div>
+      ${prospUrl ? html`<a class="btn small block" style="margin-top:10px" href=${prospUrl} target="_blank" rel="noopener"><${Icon} name="link" size=${16} /> Ouvrir Ma prospection (Bibliothèque)</a>`
+        : html`<button class="btn small ghost block" style="margin-top:8px" onClick=${openSettings}>Ajouter le lien de ma Bibliothèque (Réglages › Prospection)</button>`}
+    </div>` : null}
+    <div class="section-title"><span>${isToday ? 'Ma fiche du jour' : `Fiche du ${fmtDate(sel)}`}</span>${fiche.total ? html`<span>${fiche.done}/${fiche.total}</span>` : null}</div>
+    ${fiche.total ? html`<div class="progress" style="margin:-4px 6px 14px"><span style=${`width:${Math.round((fiche.done / fiche.total) * 100)}%`}></span></div>` : null}
+    ${fiche.late.length ? html`<div class="small" style="margin:0 6px 8px;font-weight:800;color:var(--rose-d)">En retard (pas cochées les jours d’avant)</div>${fiche.late.map(row)}` : null}
+    ${fiche.late.length && fiche.items.length ? html`<div class="small muted" style="margin:14px 6px 8px;font-weight:800">Prévu ${isToday ? 'aujourd’hui' : 'ce jour-là'}</div>` : null}
+    ${fiche.items.map(row)}
+    ${!fiche.total ? html`<div class="empty">${isToday ? 'Rien à faire aujourd’hui. Profites-en !' : 'Rien de prévu ce jour-là.'}</div>` : null}
+    ${fiche.total && !fiche.remaining.length && isToday ? html`<div class="empty">Tout est coché. Belle journée !</div>` : null}
+    <button class="btn small ghost block" style="margin-top:6px" onClick=${() => act.openRecurring()}>Gérer mes tâches récurrentes</button>
     <button class="fab" onClick=${() => act.editManual(null)} aria-label="Ajouter une tâche"><${Icon} name="plus" size=${28} stroke=${2.6} /></button>
   </div>`;
 }
@@ -227,6 +258,8 @@ function App() {
       await store.put('task', t.stateKey, { ...st, snoozedUntil: tomorrow, title: t.title, clientId: t.clientId || null });
       say('C’est noté pour demain');
     },
+    async setMails(t, n) { await store.put('task', `pm:${t.date}`, { sent: Math.max(0, n) }); if (n >= t.target) say('Bravo, objectif du jour atteint !'); },
+    openRecurring() { setSettingsOpen('recurring'); },
     async saveStep(id, patch) { const cur = S.launch.find((x) => x.id === id) || {}; await store.put('launch', id, { ...cur, id: undefined, ...patch }); },
     async addStep(label) { const order = Math.max(0, ...S.launch.map((x) => x.order || 0)) + 1; await store.put('launch', uid(), { label, order, done: false }); },
     async deleteStep(id) { await store.remove('launch', id); },
@@ -257,7 +290,7 @@ function App() {
 
   let screen;
   const openSettings = () => setSettingsOpen(true);
-  if (settingsOpen) screen = html`<${SettingsScreen} S=${S} settings=${settings} all=${all} today=${today} act=${act} onBack=${() => setSettingsOpen(false)} />`;
+  if (settingsOpen) screen = html`<${SettingsScreen} S=${S} settings=${settings} all=${all} today=${today} act=${act} initial=${typeof settingsOpen === 'string' ? settingsOpen : null} onBack=${() => setSettingsOpen(false)} />`;
   else if (tab === 'today') screen = html`<${TodayScreen} S=${S} all=${all} today=${today} act=${act} openSettings=${openSettings} banners=${banners} />`;
   else if (tab === 'clients') screen = html`<${ClientsScreen} S=${S} all=${all} today=${today} act=${act} clientId=${clientId} setClientId=${setClientId} openSettings=${openSettings} settings=${settings} />`;
   else if (tab === 'money') screen = html`<${MoneyScreen} S=${S} all=${all} today=${today} act=${act} openSettings=${openSettings} />`;
