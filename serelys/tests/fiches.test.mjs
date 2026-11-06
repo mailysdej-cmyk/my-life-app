@@ -131,3 +131,16 @@ test('Mise à jour des données v2 → v3 : sauvegarde, puis tâches de départ,
   assert.equal(st.libraryUrl, 'https://example.org');
   assert.deepEqual(st.prospection, { enabled: true, goal: 25, mode: 'quotidien', blocDay: 1 });
 });
+
+test('Une tâche récurrente ne crée pas de retard avant le jour de sa création', () => {
+  const s = base({ recurring: [
+    { id: 'v', title: 'Faire le résumé de ma semaine', scope: 'me', freq: { type: 'weekdays', weekdays: [5] }, createdAt: '2026-11-04T10:00:00Z' },
+    { id: 'l', title: 'Demander à Claude la liste de la semaine', scope: 'me', freq: { type: 'weekdays', weekdays: [1] }, createdAt: '2026-11-04T10:00:00Z' },
+  ] });
+  s.settings.trackingStart = '2026-10-19';
+  const all = computeAll(s, '2026-11-06');
+  const fiche = ficheView(all, '2026-11-06', '2026-11-06');
+  assert.deepEqual(fiche.late.filter((t) => t.recurringId).map((t) => t.key), [], 'ni le 23 octobre, ni le 26 octobre, ni le 2 novembre');
+  assert.ok(fiche.items.some((t) => t.key === 'r:v:2026-11-06'), 'le résumé de ce vendredi est bien là');
+  assert.ok(find(all, 'r:l:2026-11-09'), 'la liste de Claude commence lundi prochain');
+});
