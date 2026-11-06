@@ -575,7 +575,9 @@ function recurringTasks(ctx, fromYm, toYm) {
   const out = [];
   const from = firstOf(fromYm); const to = lastOf(toYm);
   for (const r of ctx.recurring) {
-    const occ = recurringDates(r.freq, from, to);
+    // Une tâche récurrente commence le jour où je la crée : pas de « retard » sur les semaines d'avant
+    const since = isDate(r.createdAt) ? maxD(from, day(r.createdAt)) : from;
+    const occ = recurringDates(r.freq, since, to).filter((o) => (o.due || o.date) >= since);
     const note = r.note ? [r.note] : null;
     if (r.scope === 'clients') {
       for (const c of ctx.clients) {
