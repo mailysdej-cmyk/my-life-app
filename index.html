@@ -122,6 +122,20 @@ function getSportForPhase(key){return CYCLE_SPORT.find(s=>s.key===key)||CYCLE_SP
 const PHASE_ICON_NAME={menstruelle:"droplet",folliculaire:"flower",ovulation:"sparkles",luteale:"moon"};
 const DEF_MORNING_STEPS=["Réveil","Faire le lit – Verre d'eau – Lumière naturelle","Petit-déjeuner sain préparé","Sport 20 à 30 min","Douche – Routine visage – Habillage","Départ de la journée"];
 const DEF_EVENING_STEPS=["Retour – Moment avec Tom","Dîner sain","Vaisselle + rangement","Douche – Routine visage","Temps calme (lecture, détente)","Respiration / Méditation","Extinction – Sommeil 8 à 9h"];
+const CURE_MOMENTS=[
+  {key:"matin",label:"Matin",sub:"Au petit-déjeuner",icon:"sun"},
+  {key:"midi",label:"Midi",sub:"Pendant le repas",icon:"bowl"},
+  {key:"soir",label:"Soir",sub:"Au dîner",icon:"moon"},
+];
+const DEF_CURE_SUPPS=[
+  {id:1,name:"Euphytose",dose:"",moments:["matin","midi","soir"],duration:""},
+  {id:2,name:"Luxéol",dose:"1 gélule",moments:["matin"],duration:""},
+  {id:3,name:"Oméga-3",dose:"",moments:["midi"],duration:"3 mois"},
+  {id:4,name:"Vitamine D",dose:"gouttes",moments:["midi"],duration:"D'octobre à mars"},
+  {id:5,name:"Magnésium bisglycinate",dose:"",moments:["soir"],duration:"1 mois"},
+];
+// Liste des prises du jour : une par produit et par moment
+function cureDoses(supps){return CURE_MOMENTS.flatMap(m=>supps.filter(sp=>sp.moments.includes(m.key)).map(sp=>({id:`${sp.id}-${m.key}`,moment:m.key,supp:sp})));}
 const DEF_KEY_HABITS=[
   {id:1,label:"Hydratation",sub:"2L / jour",icon:"droplet"},
   {id:2,label:"Sommeil",sub:"8 à 9h",icon:"moon"},
@@ -357,6 +371,29 @@ const css=`
 .rt-note{font-size:10.5px;color:#aaa;margin:-8px 0 10px 2px;}
 .sec-edit{display:inline-flex;align-items:center;gap:5px;background:none;border:none;color:${MAUVE};font-size:11px;cursor:pointer;opacity:.75;padding:0 0 0 4px;}
 .rt-sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;}
+.cure-progress{background:white;border-radius:22px;padding:14px;margin-bottom:16px;box-shadow:0 2px 8px rgba(107,69,48,0.22);}
+.cure-progress-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px;}
+.cure-count{font-family:'Quicksand',sans-serif;font-weight:700;font-size:22px;color:${DARK};}
+.cure-count small{font-size:12px;font-weight:500;color:#aaa;margin-left:3px;}
+.cure-streak{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:${MAUVE};background:${CREAM};border-radius:999px;padding:5px 11px;white-space:nowrap;}
+.cure-bar{height:10px;border-radius:999px;background:${CREAM};overflow:hidden;box-shadow:inset 0 1px 3px rgba(107,69,48,0.18);}
+.cure-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,${MAUVE},${R});transition:width .35s ease;}
+.cure-moment-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.cure-moment-ic{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:${MAUVE};background:radial-gradient(circle at 32% 28%,rgba(255,255,255,0.9),${BLUSH} 65%,${GOLD} 100%);box-shadow:inset -2px -2px 4px rgba(74,40,23,0.15),inset 2px 2px 4px rgba(255,255,255,0.5);flex-shrink:0;}
+.cure-moment-title{font-family:'Quicksand',sans-serif;font-weight:600;font-size:16px;color:${DARK};line-height:1.1;}
+.cure-moment-sub{font-size:10px;color:#aaa;}
+.cure-moment-count{margin-left:auto;font-size:10.5px;color:${MAUVE};font-weight:500;}
+.cure-dose{font-size:10px;color:#aaa;margin-left:4px;}
+.supp-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid ${BLUSH};cursor:pointer;}
+.supp-row:first-of-type{border-top:none;}
+.supp-name{font-size:13px;color:${DARK};font-weight:500;}
+.supp-meta{font-size:10.5px;color:#aaa;margin-top:2px;line-height:1.4;}
+.supp-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;}
+.supp-tag{font-size:9.5px;padding:3px 8px;border-radius:999px;background:${CREAM};color:${MAUVE};display:inline-flex;align-items:center;gap:3px;}
+.moment-pick{display:flex;gap:6px;margin-bottom:12px;}
+.moment-pick-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 4px;border-radius:16px;border:1px solid ${BLUSH};background:${CREAM};color:${MAUVE};font-size:11px;cursor:pointer;transition:all .15s;}
+.moment-pick-item.sel{background:linear-gradient(135deg,${MAUVE},${R});color:white;border-color:transparent;}
+.cure-note{display:flex;align-items:flex-start;gap:8px;font-size:11.5px;color:${MAUVE};background:${BLUSH}66;border:1px dashed ${GOLD};border-radius:18px;padding:11px 13px;margin-bottom:12px;line-height:1.45;}
 .kh-card{position:relative;}
 .kh-del{position:absolute;top:2px;right:3px;background:none;border:none;color:#ddd;font-size:10px;cursor:pointer;padding:2px;}
 .add-kh-card{background:transparent;border:2px dashed ${BLUSH};border-radius:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:${R};font-size:18px;min-height:64px;}
@@ -487,6 +524,14 @@ function App(){
   const[goldenRules,setGoldenRules]=useState(()=>load("ml_golden_rules",DEF_GOLDEN_RULES).map(noEmoji).filter(Boolean));
   const[morningSteps,setMorningSteps]=useState(()=>load("ml_morning_steps",DEF_MORNING_STEPS).map(noEmoji).filter(Boolean));
   const[eveningSteps,setEveningSteps]=useState(()=>load("ml_evening_steps",DEF_EVENING_STEPS).map(noEmoji).filter(Boolean));
+  const[cureStart,setCureStart]=useState(()=>{const v=load("ml_cure_start",null);return typeof v==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(v)?v:dStr(TODAY);});
+  const[cureSupps,setCureSupps]=useState(()=>{const v=load("ml_cure_supps",null);return Array.isArray(v)?v.filter(x=>x&&x.name).map(x=>({...x,moments:Array.isArray(x.moments)?x.moments:[]})):DEF_CURE_SUPPS;});
+  const[cureChecks,setCureChecks]=useState(()=>{const v=load("ml_cure_checks",{});return v&&typeof v==="object"&&!Array.isArray(v)?v:{};});
+  const[cureDay,setCureDay]=useState(()=>dStr(new Date()));
+  const[cureStartModal,setCureStartModal]=useState(false);
+  const[cureStartForm,setCureStartForm]=useState("");
+  const[suppModal,setSuppModal]=useState(null);
+  const[suppForm,setSuppForm]=useState({name:"",dose:"",moments:[],duration:""});
   const[keyHabits,setKeyHabits]=useState(()=>load("ml_key_habits",DEF_KEY_HABITS).map(k=>({...k,label:noEmoji(k.label),sub:noEmoji(k.sub),icon:toIconName(k.icon,k.label)})));
   const[rulesModal,setRulesModal]=useState(false);
   const[rulesForm,setRulesForm]=useState("");
@@ -507,6 +552,16 @@ function App(){
   useEffect(()=>{save("ml_morning_steps",morningSteps);},[morningSteps]);
   useEffect(()=>{save("ml_evening_steps",eveningSteps);},[eveningSteps]);
   useEffect(()=>{save("ml_key_habits",keyHabits);},[keyHabits]);
+  useEffect(()=>{save("ml_cure_start",cureStart);},[cureStart]);
+  useEffect(()=>{save("ml_cure_supps",cureSupps);},[cureSupps]);
+  useEffect(()=>{save("ml_cure_checks",cureChecks);},[cureChecks]);
+  // Les prises sont rangées par date : à minuit, la nouvelle journée commence décochée
+  useEffect(()=>{
+    const tick=()=>setCureDay(d=>{const n=dStr(new Date());return n!==d?n:d;});
+    const iv=setInterval(tick,30000);
+    document.addEventListener("visibilitychange",tick);
+    return()=>{clearInterval(iv);document.removeEventListener("visibilitychange",tick);};
+  },[]);
 
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),2000);};
   const selStr=dStr(curDate);
@@ -666,7 +721,48 @@ function App(){
   };
   const delKh=()=>{setKeyHabits(k=>k.filter(x=>x.id!==editKhId));setKhModal(false);};
 
-  const TAB_ORDER=["home","calendar","todo","habits","routine","cycle"];
+  const cureDoseList=cureDoses(cureSupps);
+  const cureToday=(cureChecks[cureDay]&&cureChecks[cureDay].ids)||[];
+  const cureDoneCount=cureDoseList.filter(d=>cureToday.includes(d.id)).length;
+  const cureTotal=cureDoseList.length;
+  const cureDayNum=Math.max(0,dayDiff(parseD(cureDay),parseD(cureStart)));
+  // Jours consécutifs où toutes les prises ont été cochées (aujourd'hui compte s'il est complet)
+  const cureStreak=(()=>{
+    let n=0,d=parseD(cureDay);
+    if(cureTotal>0&&cureDoneCount===cureTotal)n=1;
+    for(;;){d=addDays(d,-1);const c=cureChecks[dStr(d)];if(c&&c.complete)n++;else break;}
+    return n;
+  })();
+  const toggleCureDose=id=>{
+    setCureChecks(cc=>{
+      const cur=(cc[cureDay]&&cc[cureDay].ids)||[];
+      const ids=cur.includes(id)?cur.filter(x=>x!==id):[...cur,id];
+      const complete=cureDoseList.length>0&&cureDoseList.every(d=>ids.includes(d.id));
+      // On garde un an d'historique pour le compteur de jours consécutifs
+      const limit=dStr(addDays(parseD(cureDay),-366));
+      const next={};Object.keys(cc).forEach(k=>{if(k>=limit)next[k]=cc[k];});
+      next[cureDay]={ids,complete};
+      return next;
+    });
+  };
+  const openCureStart=()=>{setCureStartForm(cureStart);setCureStartModal(true);};
+  const saveCureStart=()=>{if(!cureStartForm)return;setCureStart(cureStartForm);setCureStartModal(false);showToast("Date de début mise à jour");};
+  const openSuppAdd=()=>{setSuppForm({name:"",dose:"",moments:["matin"],duration:""});setSuppModal({mode:"add"});};
+  const openSuppEdit=sp=>{setSuppForm({name:sp.name,dose:sp.dose||"",moments:[...sp.moments],duration:sp.duration||""});setSuppModal({mode:"edit",id:sp.id});};
+  const toggleSuppMoment=k=>setSuppForm(f=>({...f,moments:f.moments.includes(k)?f.moments.filter(x=>x!==k):[...f.moments,k]}));
+  const saveSupp=()=>{
+    const sf={...suppForm,name:noEmoji(suppForm.name),dose:noEmoji(suppForm.dose),duration:noEmoji(suppForm.duration)};
+    if(!sf.name)return;
+    if(!sf.moments.length){showToast("Choisis au moins un moment");return;}
+    sf.moments=CURE_MOMENTS.map(m=>m.key).filter(k=>sf.moments.includes(k));
+    if(suppModal.mode==="edit")setCureSupps(l=>l.map(x=>x.id===suppModal.id?{...x,...sf}:x));
+    else setCureSupps(l=>[...l,{id:Date.now(),...sf}]);
+    setSuppModal(null);
+    showToast("Compléments mis à jour");
+  };
+  const delSupp=()=>{setCureSupps(l=>l.filter(x=>x.id!==suppModal.id));setSuppModal(null);};
+
+  const TAB_ORDER=["home","calendar","todo","habits","routine","cycle","cure"];
   const onTouchStart=e=>{touchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY};};
   const onTouchEnd=e=>{
     const dx=e.changedTouches[0].clientX-touchRef.current.x;
@@ -697,7 +793,7 @@ function App(){
       </div>
 
       <div className="icon-dock">
-        {[["home","home"],["calendar","calendar"],["todo","check"],["habits","flame"],["routine","flower"],["cycle","droplet"]].map(([k,ic])=>(
+        {[["home","home"],["calendar","calendar"],["todo","check"],["habits","flame"],["routine","flower"],["cycle","droplet"],["cure","pill"]].map(([k,ic])=>(
           <button key={k} className={`dock-btn ${tab===k?"on":""}`} onClick={()=>setTab(k)}><Icon name={ic} size={16}/></button>
         ))}
       </div>
@@ -1048,6 +1144,73 @@ function App(){
           </div>
         )}
 
+        {tab==="cure"&&(
+          <div>
+            <div className="rt-hero">
+              <div className="rt-hero-label">Cure en cours</div>
+              <div className="rt-hero-title">Ma cure en cours</div>
+              <div className="rt-hero-row">
+                <div className="rt-hero-chip"><Icon name="calendar" size={12}/> Depuis le {parseD(cureStart).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}</div>
+                <div className="rt-hero-chip"><Icon name="sparkles" size={12}/> {cureDayNum} jour{cureDayNum>1?"s":""} écoulé{cureDayNum>1?"s":""}</div>
+              </div>
+              <button className="cycle-edit-btn" style={{position:"relative",zIndex:1}} onClick={openCureStart}><Icon name="pencil" size={11}/> Modifier la date de début</button>
+            </div>
+
+            <div className="cure-progress">
+              <div className="cure-progress-row">
+                <div className="cure-count">{cureDoneCount}/{cureTotal}<small>prises aujourd'hui</small></div>
+                <div className="cure-streak"><Icon name="flame" size={12}/> {cureStreak} jour{cureStreak>1?"s":""} de suite</div>
+              </div>
+              <div className="cure-bar"><div className="cure-bar-fill" style={{width:`${cureTotal?Math.round(cureDoneCount/cureTotal*100):0}%`}}/></div>
+            </div>
+
+            {CURE_MOMENTS.map(m=>{
+              const doses=cureDoseList.filter(d=>d.moment===m.key);
+              const done=doses.filter(d=>cureToday.includes(d.id)).length;
+              return(
+                <div key={m.key} className="rt-block">
+                  <div className="cure-moment-hdr">
+                    <div className="cure-moment-ic"><Icon name={m.icon} size={15}/></div>
+                    <div><div className="cure-moment-title">{m.label}</div><div className="cure-moment-sub">{m.sub}</div></div>
+                    {doses.length>0&&<div className="cure-moment-count">{done}/{doses.length}</div>}
+                  </div>
+                  {doses.length===0&&<div className="rt-note" style={{margin:"0 0 6px 2px"}}>Aucune prise à ce moment.</div>}
+                  {doses.map(d=>{
+                    const on=cureToday.includes(d.id);
+                    return(
+                      <div key={d.id} className={`rt-step ${on?"on":""}`} onClick={()=>toggleCureDose(d.id)}>
+                        <div className="rt-step-label">{d.supp.name}{d.supp.dose&&<span className="cure-dose">· {d.supp.dose}</span>}</div>
+                        <div className={`rt-check ${on?"on":""}`}>{on&&<Icon name="tick" size={10} strokeWidth={2.8}/>}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+
+            <div className="symp-box">
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                <div className="symp-title"><Icon name="pill" size={16}/> Mes compléments</div>
+                <button className="copy-btn" onClick={openSuppAdd}><Icon name="plus" size={12}/> Ajouter</button>
+              </div>
+              <div className="symp-sub">Touche un produit pour le modifier</div>
+              {cureSupps.length===0&&<div style={{fontSize:11,color:"#aaa"}}>Aucun complément pour l'instant.</div>}
+              {cureSupps.map(sp=>(
+                <div key={sp.id} className="supp-row" onClick={()=>openSuppEdit(sp)}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div className="supp-name">{sp.name}{sp.dose&&<span className="cure-dose">· {sp.dose}</span>}</div>
+                    <div className="supp-meta">Durée : {sp.duration||"non précisée"}</div>
+                    <div className="supp-tags">{CURE_MOMENTS.filter(m=>sp.moments.includes(m.key)).map(m=><span key={m.key} className="supp-tag"><Icon name={m.icon} size={10}/>{m.label}</span>)}</div>
+                  </div>
+                  <Icon name="pencil" size={14} style={{color:MAUVE,opacity:.45}}/>
+                </div>
+              ))}
+            </div>
+
+            <div className="cure-note"><Icon name="heart" size={14} style={{marginTop:1}}/><span>Avant toute nouvelle cure, je vérifie avec le pharmacien.</span></div>
+          </div>
+        )}
+
         {tab==="cycle"&&(
           <div>
             <div className="cycle-hero" style={{background:`linear-gradient(135deg,${currentPhase.color},${currentPhase.color}cc)`}}>
@@ -1270,6 +1433,47 @@ function App(){
               {editKhId&&<button className="bdel" onClick={delKh}>Supprimer</button>}
               <button className="bcanc" onClick={()=>setKhModal(false)}>Annuler</button>
               <button className="bsave" onClick={saveKh}>Enregistrer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cureStartModal&&(
+        <div className="overlay" onClick={()=>setCureStartModal(false)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div className="mod-title">Début de la cure</div>
+            <div style={{fontSize:11,color:"#aaa",marginBottom:10,textAlign:"center"}}>Choisis le jour où tu as commencé ta cure.</div>
+            <input className="minput" type="date" value={cureStartForm} onChange={e=>setCureStartForm(e.target.value)}/>
+            <div className="macts">
+              <button className="bcanc" onClick={()=>setCureStartModal(false)}>Annuler</button>
+              <button className="bsave" onClick={saveCureStart}>Enregistrer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {suppModal&&(
+        <div className="overlay" onClick={()=>setSuppModal(null)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div className="mod-title">{suppModal.mode==="edit"?"Modifier le complément":"Nouveau complément"}</div>
+            <div style={{fontSize:10,color:"#bbb",letterSpacing:".4px",marginBottom:5}}>Nom</div>
+            <input className="minput" placeholder="Nom (ex : Magnésium)" value={suppForm.name} onChange={e=>setSuppForm({...suppForm,name:e.target.value})}/>
+            <div style={{fontSize:10,color:"#bbb",letterSpacing:".4px",marginBottom:5}}>Dose (optionnel)</div>
+            <input className="minput" placeholder="Dose (ex : 1 gélule, gouttes)" value={suppForm.dose} onChange={e=>setSuppForm({...suppForm,dose:e.target.value})}/>
+            <div style={{fontSize:10,color:"#bbb",letterSpacing:".4px",marginBottom:5}}>Durée de la cure</div>
+            <input className="minput" placeholder="Durée de la cure (ex : 1 mois)" value={suppForm.duration} onChange={e=>setSuppForm({...suppForm,duration:e.target.value})}/>
+            <div style={{fontSize:10,color:"#bbb",letterSpacing:".4px",marginBottom:7}}>Moments de prise</div>
+            <div className="moment-pick">
+              {CURE_MOMENTS.map(m=>(
+                <div key={m.key} className={`moment-pick-item${suppForm.moments.includes(m.key)?" sel":""}`} onClick={()=>toggleSuppMoment(m.key)}>
+                  <Icon name={m.icon} size={16}/>{m.label}
+                </div>
+              ))}
+            </div>
+            <div className="macts">
+              {suppModal.mode==="edit"&&<button className="bdel" onClick={delSupp}>Supprimer</button>}
+              <button className="bcanc" onClick={()=>setSuppModal(null)}>Annuler</button>
+              <button className="bsave" onClick={saveSupp}>Enregistrer</button>
             </div>
           </div>
         </div>
