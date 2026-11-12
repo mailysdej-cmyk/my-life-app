@@ -135,7 +135,8 @@ const DEF_CURE_SUPPS=[
   {id:5,name:"Magnésium bisglycinate",dose:"",moments:["soir"],duration:"1 mois"},
 ];
 // Liste des prises du jour : une par produit et par moment
-function cureDoses(supps){return CURE_MOMENTS.flatMap(m=>supps.filter(sp=>sp.moments.includes(m.key)).map(sp=>({id:`${sp.id}-${m.key}`,moment:m.key,supp:sp})));}
+// Seuls les compléments « en cours » (pas en pause) comptent dans les prises du jour
+function cureDoses(supps){return CURE_MOMENTS.flatMap(m=>supps.filter(sp=>sp.active!==false&&sp.moments.includes(m.key)).map(sp=>({id:`${sp.id}-${m.key}`,moment:m.key,supp:sp})));}
 const DEF_KEY_HABITS=[
   {id:1,label:"Hydratation",sub:"2L / jour",icon:"droplet"},
   {id:2,label:"Sommeil",sub:"8 à 9h",icon:"moon"},
@@ -389,6 +390,17 @@ const css=`
 .supp-name{font-size:13px;color:${DARK};font-weight:500;}
 .supp-meta{font-size:10.5px;color:#aaa;margin-top:2px;line-height:1.4;}
 .supp-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;}
+.supp-actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0;}
+.supp-btns{display:flex;gap:6px;}
+.supp-btn{width:30px;height:30px;border-radius:50%;border:1px solid ${BLUSH};background:${CREAM};color:${MAUVE};display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;}
+.supp-btn.del{color:#e06060;background:#fff1f1;border-color:#ffe0e0;}
+.sw{display:inline-flex;align-items:center;gap:6px;font-size:10px;color:${MAUVE};cursor:pointer;background:none;border:none;padding:0;font-family:'Jost',sans-serif;}
+.sw-track{width:34px;height:20px;border-radius:999px;background:${BLUSH};position:relative;transition:background .2s;flex-shrink:0;}
+.sw-track::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:white;box-shadow:0 1px 3px rgba(107,69,48,0.35);transition:transform .2s;}
+.sw.on .sw-track{background:linear-gradient(135deg,${MAUVE},${R});}
+.sw.on .sw-track::after{transform:translateX(14px);}
+.supp-group{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#bbb;margin:12px 0 2px;}
+.supp-row.paused .supp-name,.supp-row.paused .supp-meta,.supp-row.paused .supp-tags{opacity:.5;}
 .supp-tag{font-size:9.5px;padding:3px 8px;border-radius:999px;background:${CREAM};color:${MAUVE};display:inline-flex;align-items:center;gap:3px;}
 .moment-pick{display:flex;gap:6px;margin-bottom:12px;}
 .moment-pick-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 4px;border-radius:16px;border:1px solid ${BLUSH};background:${CREAM};color:${MAUVE};font-size:11px;cursor:pointer;transition:all .15s;}
@@ -466,6 +478,7 @@ function Icon({name,size=16,strokeWidth=1.8,style}){
     case "music":return(<svg {...p}><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>);
     case "bed":return(<svg {...p}><path d="M3 18.5V6.5M3 14h18v4.5M21 14v-2.5a3 3 0 0 0-3-3h-7V14"/><circle cx="7" cy="11" r="1.8"/></svg>);
     case "apple":return(<svg {...p}><path d="M12 8c-1.6-1-5-1.1-6.2 1.9-1.3 3.1.4 7.5 2.4 9.3 1.2 1.1 2.3.8 3.8.2 1.5.6 2.6.9 3.8-.2 2-1.8 3.7-6.2 2.4-9.3C17 6.9 13.6 7 12 8z"/><path d="M12 8c0-2 1-3.6 3-4.2"/></svg>);
+    case "trash":return(<svg {...p}><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>);
     case "pill":return(<svg {...p}><path d="M10.5 20.5a4.95 4.95 0 0 1-7-7l6-6a4.95 4.95 0 0 1 7 7z"/><path d="M7.5 10.5l6 6"/></svg>);
     default:return null;
   }
@@ -531,6 +544,7 @@ function App(){
   const[cureStartModal,setCureStartModal]=useState(false);
   const[cureStartForm,setCureStartForm]=useState("");
   const[suppModal,setSuppModal]=useState(null);
+  const[suppDel,setSuppDel]=useState(null);
   const[suppForm,setSuppForm]=useState({name:"",dose:"",moments:[],duration:""});
   const[keyHabits,setKeyHabits]=useState(()=>load("ml_key_habits",DEF_KEY_HABITS).map(k=>({...k,label:noEmoji(k.label),sub:noEmoji(k.sub),icon:toIconName(k.icon,k.label)})));
   const[rulesModal,setRulesModal]=useState(false);
@@ -747,8 +761,8 @@ function App(){
   };
   const openCureStart=()=>{setCureStartForm(cureStart);setCureStartModal(true);};
   const saveCureStart=()=>{if(!cureStartForm)return;setCureStart(cureStartForm);setCureStartModal(false);showToast("Date de début mise à jour");};
-  const openSuppAdd=()=>{setSuppForm({name:"",dose:"",moments:["matin"],duration:""});setSuppModal({mode:"add"});};
-  const openSuppEdit=sp=>{setSuppForm({name:sp.name,dose:sp.dose||"",moments:[...sp.moments],duration:sp.duration||""});setSuppModal({mode:"edit",id:sp.id});};
+  const openSuppAdd=()=>{setSuppForm({name:"",dose:"",moments:["matin"],duration:"",active:true});setSuppModal({mode:"add"});};
+  const openSuppEdit=sp=>{setSuppForm({name:sp.name,dose:sp.dose||"",moments:[...sp.moments],duration:sp.duration||"",active:sp.active!==false});setSuppModal({mode:"edit",id:sp.id});};
   const toggleSuppMoment=k=>setSuppForm(f=>({...f,moments:f.moments.includes(k)?f.moments.filter(x=>x!==k):[...f.moments,k]}));
   const saveSupp=()=>{
     const sf={...suppForm,name:noEmoji(suppForm.name),dose:noEmoji(suppForm.dose),duration:noEmoji(suppForm.duration)};
@@ -760,7 +774,12 @@ function App(){
     setSuppModal(null);
     showToast("Compléments mis à jour");
   };
-  const delSupp=()=>{setCureSupps(l=>l.filter(x=>x.id!==suppModal.id));setSuppModal(null);};
+  const toggleSuppActive=sp=>{
+    const active=sp.active===false;
+    setCureSupps(l=>l.map(x=>x.id===sp.id?{...x,active}:x));
+    showToast(active?`${sp.name} : en cours`:`${sp.name} : en pause`);
+  };
+  const confirmDelSupp=()=>{setCureSupps(l=>l.filter(x=>x.id!==suppDel.id));setSuppDel(null);setSuppModal(null);showToast("Complément supprimé");};
 
   const TAB_ORDER=["home","calendar","todo","habits","routine","cycle","cure"];
   const onTouchStart=e=>{touchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY};};
@@ -1193,16 +1212,30 @@ function App(){
                 <div className="symp-title"><Icon name="pill" size={16}/> Mes compléments</div>
                 <button className="copy-btn" onClick={openSuppAdd}><Icon name="plus" size={12}/> Ajouter</button>
               </div>
-              <div className="symp-sub">Touche un produit pour le modifier</div>
+              <div className="symp-sub">Mets en pause ce que tu ne prends pas encore : il disparaît de la checklist sans être supprimé.</div>
               {cureSupps.length===0&&<div style={{fontSize:11,color:"#aaa"}}>Aucun complément pour l'instant.</div>}
-              {cureSupps.map(sp=>(
-                <div key={sp.id} className="supp-row" onClick={()=>openSuppEdit(sp)}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div className="supp-name">{sp.name}{sp.dose&&<span className="cure-dose">· {sp.dose}</span>}</div>
-                    <div className="supp-meta">Durée : {sp.duration||"non précisée"}</div>
-                    <div className="supp-tags">{CURE_MOMENTS.filter(m=>sp.moments.includes(m.key)).map(m=><span key={m.key} className="supp-tag"><Icon name={m.icon} size={10}/>{m.label}</span>)}</div>
-                  </div>
-                  <Icon name="pencil" size={14} style={{color:MAUVE,opacity:.45}}/>
+              {[["Je prends actuellement",cureSupps.filter(sp=>sp.active!==false)],["En pause",cureSupps.filter(sp=>sp.active===false)]].map(([title,list])=>list.length>0&&(
+                <div key={title}>
+                  <div className="supp-group">{title}</div>
+                  {list.map(sp=>{
+                    const on=sp.active!==false;
+                    return(
+                      <div key={sp.id} className={`supp-row${on?"":" paused"}`} onClick={()=>openSuppEdit(sp)}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div className="supp-name">{sp.name}{sp.dose&&<span className="cure-dose">· {sp.dose}</span>}</div>
+                          <div className="supp-meta">Durée : {sp.duration||"non précisée"}</div>
+                          <div className="supp-tags">{CURE_MOMENTS.filter(m=>sp.moments.includes(m.key)).map(m=><span key={m.key} className="supp-tag"><Icon name={m.icon} size={10}/>{m.label}</span>)}</div>
+                        </div>
+                        <div className="supp-actions" onClick={e=>e.stopPropagation()}>
+                          <button className={`sw${on?" on":""}`} onClick={()=>toggleSuppActive(sp)} aria-label={on?"Mettre en pause":"Reprendre"}>{on?"En cours":"En pause"}<span className="sw-track"/></button>
+                          <div className="supp-btns">
+                            <button className="supp-btn" onClick={()=>openSuppEdit(sp)} aria-label="Modifier"><Icon name="pencil" size={13}/></button>
+                            <button className="supp-btn del" onClick={()=>setSuppDel(sp)} aria-label="Supprimer"><Icon name="trash" size={13}/></button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ))}
             </div>
@@ -1452,6 +1485,19 @@ function App(){
         </div>
       )}
 
+      {suppDel&&(
+        <div className="overlay" style={{zIndex:210}} onClick={()=>setSuppDel(null)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div className="mod-title">Supprimer {suppDel.name} ?</div>
+            <div style={{fontSize:11,color:"#aaa",marginBottom:14,textAlign:"center",lineHeight:1.5}}>Il sera retiré de ta liste. Si tu comptes le reprendre plus tard, mets-le plutôt en pause.</div>
+            <div className="macts">
+              <button className="bcanc" onClick={()=>setSuppDel(null)}>Annuler</button>
+              <button className="bdel" style={{flex:2}} onClick={confirmDelSupp}>Supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {suppModal&&(
         <div className="overlay" onClick={()=>setSuppModal(null)}>
           <div className="modal" onClick={e=>e.stopPropagation()}>
@@ -1462,6 +1508,7 @@ function App(){
             <input className="minput" placeholder="Dose (ex : 1 gélule, gouttes)" value={suppForm.dose} onChange={e=>setSuppForm({...suppForm,dose:e.target.value})}/>
             <div style={{fontSize:10,color:"#bbb",letterSpacing:".4px",marginBottom:5}}>Durée de la cure</div>
             <input className="minput" placeholder="Durée de la cure (ex : 1 mois)" value={suppForm.duration} onChange={e=>setSuppForm({...suppForm,duration:e.target.value})}/>
+            <button className={`sw${suppForm.active?" on":""}`} style={{fontSize:12,marginBottom:12}} onClick={()=>setSuppForm({...suppForm,active:!suppForm.active})}><span className="sw-track"/>{suppForm.active?"Je le prends actuellement":"En pause (pas encore commencé)"}</button>
             <div style={{fontSize:10,color:"#bbb",letterSpacing:".4px",marginBottom:7}}>Moments de prise</div>
             <div className="moment-pick">
               {CURE_MOMENTS.map(m=>(
@@ -1471,7 +1518,7 @@ function App(){
               ))}
             </div>
             <div className="macts">
-              {suppModal.mode==="edit"&&<button className="bdel" onClick={delSupp}>Supprimer</button>}
+              {suppModal.mode==="edit"&&<button className="bdel" onClick={()=>setSuppDel(cureSupps.find(x=>x.id===suppModal.id))}>Supprimer</button>}
               <button className="bcanc" onClick={()=>setSuppModal(null)}>Annuler</button>
               <button className="bsave" onClick={saveSupp}>Enregistrer</button>
             </div>
