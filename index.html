@@ -11,6 +11,8 @@
 <meta http-equiv="Pragma" content="no-cache"/>
 <meta http-equiv="Expires" content="0"/>
 <title>My Life</title>
+<link rel="manifest" href="manifest.webmanifest"/>
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
@@ -120,35 +122,69 @@ function occursOn(ev,ds){
   if(ev.repeat==="yearly")return d2===d&&m2===m;
   return false;
 }
-// Fichier .ics (avec répétition et alarme) : le Calendrier de l'iPhone se charge de la notification
-function icsFor(ev){
-  const p2=n=>String(n).padStart(2,"0");
-  const esc=t=>String(t).replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");
-  const stamp=(ds,h,mi)=>ds.replace(/-/g,"")+"T"+p2(h)+p2(mi)+"00";
-  const start=new Date(ev.date+"T00:00:00");start.setHours(ev.hour,ev.min||0);
-  const end=ev.endHour!=null?new Date(ev.date+"T00:00:00"):new Date(start.getTime()+3600000);
-  if(ev.endHour!=null){end.setHours(ev.endHour,ev.endMin||0);if(end<=start)end.setTime(start.getTime()+3600000);}
-  const now=new Date();
-  const utc=now.getUTCFullYear()+p2(now.getUTCMonth()+1)+p2(now.getUTCDate())+"T"+p2(now.getUTCHours())+p2(now.getUTCMinutes())+p2(now.getUTCSeconds())+"Z";
-  const trig=ev.reminder===0?"PT0M":ev.reminder%1440===0?`-P${ev.reminder/1440}D`:ev.reminder%60===0?`-PT${ev.reminder/60}H`:`-PT${ev.reminder}M`;
-  const freq={daily:"DAILY",weekly:"WEEKLY",monthly:"MONTHLY",yearly:"YEARLY"}[ev.repeat];
-  const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//My Life//FR","CALSCALE:GREGORIAN","BEGIN:VEVENT",
-    `UID:mylife-${ev.id}@mylife`,`DTSTAMP:${utc}`,
-    `DTSTART:${stamp(ev.date,ev.hour,ev.min||0)}`,`DTEND:${stamp(dStr(end),end.getHours(),end.getMinutes())}`,
-    `SUMMARY:${esc(ev.title)}`];
-  if(freq)lines.push(`RRULE:FREQ=${freq}`);
-  if(freq&&ev.skip&&ev.skip.length)lines.push(`EXDATE:${ev.skip.map(d=>stamp(d,ev.hour,ev.min||0)).join(",")}`);
-  if(ev.reminder!=null)lines.push("BEGIN:VALARM","ACTION:DISPLAY",`DESCRIPTION:${esc(ev.title)}`,`TRIGGER:${trig}`,"END:VALARM");
-  lines.push("END:VEVENT","END:VCALENDAR");
-  return lines.join("\r\n")+"\r\n";
+// ── Rappels : notifications envoyées par le programme en ligne de My Life (dossier notifications/),
+// même quand l'appli est fermée. Adresse du programme, remplie à l'installation :
+const MYLIFE_PUSH_URL="";
+const pushSupported=()=>"serviceWorker"in navigator&&"PushManager"in window&&"Notification"in window;
+const isIOS=()=>/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+const isStandalone=()=>window.matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+async function pushCall(body){
+  if(!MYLIFE_PUSH_URL)throw new Error("Les notifications ne sont pas encore installées (étape à finir côté serveur).");
+  let r;
+  try{r=await fetch(MYLIFE_PUSH_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});}
+  catch(e){throw new Error("Pas de connexion internet : réessaie dans un moment.");}
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(j.error||"Le service des rappels ne répond pas.");
+  return j;
 }
-function openInPhoneCalendar(ev){
-  const ics=icsFor(ev);
-  const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
-  if(ios){window.location.href="data:text/calendar;charset=utf-8,"+encodeURIComponent(ics);return;}
-  const url=URL.createObjectURL(new Blob([ics],{type:"text/calendar"}));
-  const a=document.createElement("a");a.href=url;a.download=(ev.title||"evenement").replace(/[^\p{L}\p{N} -]/gu,"").trim()+".ics";
-  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+function b64ToBytes(b64){const t=atob(b64.replace(/-/g,"+").replace(/_/g,"/")+"=".repeat((4-b64.length%4)%4));return Uint8Array.from(t,c=>c.charCodeAt(0));}
+async function currentPushSub(){
+  if(!pushSupported())return null;
+  try{const reg=await navigator.serviceWorker.getRegistration();return reg?await reg.pushManager.getSubscription():null;}catch(e){return null;}
+}
+// À appeler directement depuis un appui sur un bouton (exigé par l'iPhone).
+async function enablePush(){
+  if(!pushSupported()){
+    if(isIOS()&&!isStandalone())throw new Error("Sur iPhone, ajoute d'abord My Life à l'écran d'accueil (bouton Partager › « Sur l'écran d'accueil »), puis ouvre-la depuis son icône.");
+    throw new Error("Ce téléphone ou ce navigateur ne gère pas les notifications.");
+  }
+  if(!MYLIFE_PUSH_URL)throw new Error("Les notifications ne sont pas encore installées (étape à finir côté serveur).");
+  const perm=await Notification.requestPermission();
+  if(perm!=="granted")throw new Error("Notifications refusées. Sur iPhone : Réglages › Notifications › My Life › Autoriser.");
+  const reg=await navigator.serviceWorker.register("sw.js");
+  await navigator.serviceWorker.ready;
+  const{publicKey}=await pushCall({action:"vapid"});
+  let sub=await reg.pushManager.getSubscription();
+  if(sub&&sub.options&&sub.options.applicationServerKey){
+    const cur=btoa(String.fromCharCode(...new Uint8Array(sub.options.applicationServerKey))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+    if(cur!==publicKey){await sub.unsubscribe();sub=null;}
+  }
+  if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToBytes(publicKey)});
+  return sub;
+}
+// Les prochains rappels (environ un an) calculés à partir des événements, répétitions comprises.
+function reminderBody(ev,at){
+  const t=`${String(at.getHours()).padStart(2,"0")} h ${String(at.getMinutes()).padStart(2,"0")}`;
+  if(ev.reminder===0)return`C'est maintenant, ${t}`;
+  if(ev.reminder===1440)return`Demain à ${t}`;
+  if(ev.reminder===60)return`Dans 1 heure, à ${t}`;
+  return`Dans ${ev.reminder} minutes, à ${t}`;
+}
+function upcomingReminders(events,now=new Date()){
+  const out=[];
+  const first=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  for(const ev of events){
+    if(ev.reminder==null)continue;
+    for(let i=0;i<=400;i++){
+      const d=addDays(first,i),ds=dStr(d);
+      if(!occursOn(ev,ds))continue;
+      const at=new Date(d.getFullYear(),d.getMonth(),d.getDate(),ev.hour,ev.min||0);
+      const fire=new Date(at.getTime()-ev.reminder*60000);
+      if(fire>now)out.push({key:`${ev.id}-${ds}-${ev.hour}h${ev.min||0}-${ev.reminder}`,at:fire.toISOString(),title:ev.title,body:reminderBody(ev,at)});
+      if(!ev.repeat||ev.repeat==="none")break;
+    }
+  }
+  return out.sort((a,b)=>a.at<b.at?-1:1).slice(0,400);
 }
 function sameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
 function getMonDay(d){const day=d.getDay();return day===0?6:day-1;}
@@ -295,7 +331,9 @@ const css=`
 .opt{padding:7px 12px;border-radius:999px;border:1px solid ${BLUSH};background:${CREAM};color:${MAUVE};font-size:11.5px;cursor:pointer;font-family:'Jost',sans-serif;transition:all .15s;}
 .opt.sel{background:linear-gradient(135deg,${MAUVE},${R});color:white;border-color:transparent;}
 .ev-flags{display:inline-flex;gap:3px;margin-left:5px;vertical-align:-1px;opacity:.7;}
-.ics-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px;border-radius:17px;border:1px dashed ${GOLD};background:${BLUSH}55;color:${MAUVE};font-family:'Jost',sans-serif;font-size:12px;cursor:pointer;margin-bottom:12px;}
+.push-box{display:flex;align-items:flex-start;gap:8px;font-size:11px;line-height:1.45;color:${MAUVE};background:${BLUSH}55;border:1px dashed ${GOLD};border-radius:16px;padding:10px 12px;margin:-2px 0 12px;}
+.push-box.ok{border-style:solid;border-color:${BLUSH};background:${CREAM};}
+.push-btn{margin-top:7px;padding:7px 12px;border:none;border-radius:999px;background:linear-gradient(135deg,${MAUVE},${R});color:white;font-family:'Jost',sans-serif;font-size:11px;cursor:pointer;}
 .cpick{display:flex;gap:8px;margin-bottom:15px;}
 .cdot{width:24px;height:24px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .15s;}
 .cdot.sel{transform:scale(1.2);border-color:${DARK};}
@@ -566,7 +604,10 @@ function App(){
   const[todoInput,setTodoInput]=useState("");
   const[modal,setModal]=useState(null);
   const[evDel,setEvDel]=useState(null);
-  const[icsAsk,setIcsAsk]=useState(null);
+  const[pushAsk,setPushAsk]=useState(false);
+  const[pushOn,setPushOn]=useState(()=>load("ml_push_on",false)===true);
+  const[pushBusy,setPushBusy]=useState(false);
+  const[pushErr,setPushErr]=useState("");
   const[form,setForm]=useState({title:"",hour:"09",min:"00",endHour:"",endMin:"",color:"pink"});
   const[editingTodo,setEditingTodo]=useState(null);
   const[habitModal,setHabitModal]=useState(false);
@@ -631,6 +672,35 @@ function App(){
   },[]);
 
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),2000);};
+  useEffect(()=>{save("ml_push_on",pushOn);},[pushOn]);
+  // Au démarrage : si l'iPhone a retiré l'autorisation, on repasse en « non activé »
+  useEffect(()=>{if(pushOn)currentPushSub().then(sub=>{if(!sub)setPushOn(false);});},[]);
+  const syncPush=async()=>{
+    const sub=await currentPushSub();
+    if(!sub){setPushOn(false);return;}
+    await pushCall({action:"sync",subscription:sub.toJSON(),reminders:upcomingReminders(events)});
+  };
+  // Chaque modification des événements (et chaque ouverture de l'appli) met à jour les rappels prévus
+  useEffect(()=>{
+    if(!pushOn)return;
+    const t=setTimeout(()=>{syncPush().catch(()=>{});},1200);
+    return()=>clearTimeout(t);
+  },[events,pushOn]);
+  useEffect(()=>{
+    const onVis=()=>{if(document.visibilityState==="visible"&&pushOn)syncPush().catch(()=>{});};
+    document.addEventListener("visibilitychange",onVis);
+    return()=>document.removeEventListener("visibilitychange",onVis);
+  },[events,pushOn]);
+  const turnOnPush=async()=>{
+    setPushBusy(true);setPushErr("");
+    try{
+      const sub=await enablePush();
+      await pushCall({action:"sync",subscription:sub.toJSON(),reminders:upcomingReminders(events)});
+      await pushCall({action:"test",subscription:sub.toJSON()});
+      setPushOn(true);setPushAsk(false);showToast("Notifications activées");
+    }catch(e){setPushErr(e.message||String(e));}
+    setPushBusy(false);
+  };
   const selStr=dStr(curDate);
   const dayEvs=events.filter(e=>occursOn(e,selStr)).sort((a,b)=>a.hour*60+a.min-(b.hour*60+b.min));
   const isToday=d=>sameDay(d,TODAY);
@@ -640,7 +710,8 @@ function App(){
   const wkDays=Array.from({length:7},(_,i)=>addDays(wkStart,i));
   const hDays=Array.from({length:7},(_,i)=>addDays(TODAY,-6+i));
   const colCfg=k=>COLORS.find(c=>c.key===k)||COLORS[0];
-  const HOURS=[5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21];
+  // De 5 h à 21 h, plus les heures du jour choisi où il y a un événement (tôt le matin, tard le soir)
+  const HOURS=[...new Set([5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,...dayEvs.map(e=>e.hour)])].sort((a,b)=>a-b);
 
   const mkGrid=(y,m,mini=false)=>{
     const first=getFirstMon(y,m),days=getDIM(y,m),prev=getDIM(y,m===0?11:m-1);
@@ -674,9 +745,9 @@ function App(){
     if(modal.mode==="add"){saved={id:Date.now(),date:selStr,...fields};setEvents(ev=>[...ev,saved]);}
     else{saved={...modal.ev,...fields};setEvents(ev=>ev.map(e=>e.id===modal.ev.id?saved:e));}
     setModal(null);
-    // Rappel demandé : on propose de l'ajouter au Calendrier de l'iPhone, qui enverra la notification
+    // Rappel demandé alors que les notifications ne sont pas activées sur ce téléphone : on le propose
     const changed=modal.mode==="add"||modal.ev.reminder!==fields.reminder||modal.ev.hour!==fields.hour||modal.ev.min!==fields.min||(modal.ev.repeat||"none")!==fields.repeat||modal.ev.title!==title;
-    if(fields.reminder!=null&&changed)setIcsAsk(saved);
+    if(fields.reminder!=null&&changed&&!pushOn)setPushAsk(true);
   };
   // Supprimer : pour un événement qui se répète, on choisit « cette fois » ou « toute la série »
   const askDelEv=(ev,occ)=>{if(ev.repeat&&ev.repeat!=="none")setEvDel({ev,occ});else{setEvents(es=>es.filter(x=>x.id!==ev.id));setModal(null);}};
@@ -1455,7 +1526,11 @@ function App(){
               <button className={`opt${form.reminder!=null?" sel":""}`} onClick={()=>setForm({...form,reminder:form.reminder??15})}>Oui</button>
             </div>
             {form.reminder!=null&&<div className="opt-pick" style={{marginTop:-4}}>{REMINDERS.map(r=><button key={r.min} className={`opt${form.reminder===r.min?" sel":""}`} onClick={()=>setForm({...form,reminder:r.min})}>{r.label}</button>)}</div>}
-            {modal.mode==="edit"&&modal.ev.reminder!=null&&<button className="ics-btn" onClick={()=>openInPhoneCalendar(modal.ev)}><Icon name="bell" size={13}/> Remettre le rappel dans le Calendrier de l'iPhone</button>}
+            {form.reminder!=null&&(pushOn
+              ?<div className="push-box ok"><Icon name="bell" size={13} style={{marginTop:1}}/><span>Tu recevras une notification My Life sur ce téléphone, même appli fermée.</span></div>
+              :<div className="push-box"><Icon name="bell" size={13} style={{marginTop:1}}/><span>Pour recevoir ce rappel, active les notifications sur ce téléphone.<br/>
+                <button className="push-btn" disabled={pushBusy} onClick={turnOnPush}>{pushBusy?"Activation…":"Activer les notifications"}</button>
+                {pushErr&&<span style={{display:"block",color:"#d06060",marginTop:6}}>{pushErr}</span>}</span></div>)}
             <div className="macts">
               {modal.mode==="edit"&&<button className="bdel" onClick={delEv}>Supprimer</button>}
               <button className="bcanc" onClick={()=>setModal(null)}>Annuler</button>
@@ -1479,16 +1554,17 @@ function App(){
         </div>
       )}
 
-      {icsAsk&&(
-        <div className="overlay" style={{zIndex:210}} onClick={()=>setIcsAsk(null)}>
+      {pushAsk&&(
+        <div className="overlay" style={{zIndex:210}} onClick={()=>setPushAsk(false)}>
           <div className="modal" onClick={e=>e.stopPropagation()}>
             <div style={{display:"flex",justifyContent:"center",color:MAUVE,marginBottom:8}}><Icon name="bell" size={26}/></div>
-            <div className="mod-title" style={{marginBottom:8}}>Recevoir le rappel sur ton iPhone</div>
+            <div className="mod-title" style={{marginBottom:8}}>Activer les notifications</div>
             <div style={{fontSize:11.5,color:"#999",marginBottom:16,textAlign:"center",lineHeight:1.55}}>
-              Appuie sur le bouton puis sur <b style={{color:MAUVE}}>Ajouter</b> : « {icsAsk.title} » ira dans le Calendrier de ton iPhone avec son rappel ({REMINDERS.find(r=>r.min===icsAsk.reminder)?.label.toLowerCase()}){icsAsk.repeat&&icsAsk.repeat!=="none"?` et sa répétition (${REPEATS.find(r=>r.key===icsAsk.repeat).label.toLowerCase()})`:""}. C'est lui qui t'enverra la notification, même si My Life est fermée.
+              Pour que My Life t'envoie tes rappels, même quand l'appli est fermée, autorise les notifications sur ce téléphone. À faire une seule fois.
             </div>
-            <button className="bsave" style={{width:"100%",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"center",gap:7}} onClick={()=>{openInPhoneCalendar(icsAsk);setIcsAsk(null);}}><Icon name="calendar" size={14}/> Ajouter au Calendrier de l'iPhone</button>
-            <button className="bcanc" style={{width:"100%"}} onClick={()=>setIcsAsk(null)}>Plus tard</button>
+            {pushErr&&<div style={{fontSize:11.5,color:"#d06060",marginBottom:12,textAlign:"center",lineHeight:1.5}}>{pushErr}</div>}
+            <button className="bsave" style={{width:"100%",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"center",gap:7}} disabled={pushBusy} onClick={turnOnPush}><Icon name="bell" size={14}/> {pushBusy?"Activation…":"Activer les notifications"}</button>
+            <button className="bcanc" style={{width:"100%"}} onClick={()=>{setPushAsk(false);setPushErr("");}}>Plus tard</button>
           </div>
         </div>
       )}

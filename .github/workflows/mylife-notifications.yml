@@ -1,0 +1,49 @@
+# My Life uniquement : met en ligne le programme des rappels (dossier notifications/)
+# et le garde éveillé chaque jour.
+name: My Life notifications
+
+on:
+  push:
+    branches: [main]
+    paths: ['notifications/**', '.github/workflows/mylife-notifications.yml']
+  schedule:
+    - cron: '29 6 * * *'   # réveil quotidien (les projets gratuits s'endorment après 7 jours sans activité)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-function:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: notifications } }
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.MYLIFE_SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Projet Supabase (lu dans index.html)
+        run: |
+          REF=$(grep -oE 'MYLIFE_PUSH_URL="https://[a-z0-9]+\.supabase\.co' ../index.html | sed -E 's#.*https://([a-z0-9]+)\..*#\1#')
+          echo "REF=$REF" >> "$GITHUB_ENV"
+      - name: Pas encore configuré
+        if: env.SUPABASE_ACCESS_TOKEN == '' || env.REF == ''
+        run: echo 'Clé MYLIFE_SUPABASE_ACCESS_TOKEN ou adresse du projet manquante, déploiement ignoré.'
+      - uses: supabase/setup-cli@v1
+        if: env.SUPABASE_ACCESS_TOKEN != '' && env.REF != ''
+        with: { version: 2.20.12 }
+      - name: Mettre en ligne le programme des rappels
+        if: env.SUPABASE_ACCESS_TOKEN != '' && env.REF != ''
+        run: supabase functions deploy mylife-push --project-ref "$REF" --no-verify-jwt --use-api
+
+  keepalive:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Réveiller le service
+        run: |
+          URL=$(grep -oE 'MYLIFE_PUSH_URL="[^"]*"' index.html | sed -E 's/.*="(.*)"/\1/')
+          if [ -z "$URL" ]; then echo "Pas encore configuré"; exit 0; fi
+          curl -fsS -X POST "$URL" -H "Content-Type: application/json" -d '{"action":"ping"}'
+          echo
