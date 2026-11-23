@@ -1,0 +1,5 @@
+# Réglages minimaux pour déployer la fonction « mylife-push » (voir .github/workflows/mylife-notifications.yml)
+project_id = "my-life"
+
+[functions.mylife-push]
+verify_jwt = false
