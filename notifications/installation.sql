@@ -1,7 +1,7 @@
 -- ============================================================================
 -- My Life : installation des rappels (à coller une seule fois dans
 -- Supabase › SQL Editor › New query › Run). Sans danger si on le relance.
--- Remplacer ADRESSE_DU_PROJET par l'adresse du projet (ex. https://abcd.supabase.co).
+-- Tables et programme propres à My Life (préfixe mylife_) : rien de Serelys n'est touché.
 -- ============================================================================
 
 -- 1. Les téléphones qui reçoivent les rappels, et les rappels à venir
@@ -42,7 +42,7 @@ select cron.unschedule(jobid) from cron.job where jobname in ('mylife-push', 'my
 
 select cron.schedule('mylife-push', '* * * * *', $job$
   select net.http_post(
-    url := 'ADRESSE_DU_PROJET/functions/v1/mylife-push',
+    url := 'https://hvmfcvjkzgsojijqdqtq.supabase.co/functions/v1/mylife-push',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'x-mylife-cron', (select v #>> '{}' from public.mylife_system where k = 'cron_secret')),

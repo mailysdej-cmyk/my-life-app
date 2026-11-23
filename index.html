@@ -124,7 +124,7 @@ function occursOn(ev,ds){
 }
 // ── Rappels : notifications envoyées par le programme en ligne de My Life (dossier notifications/),
 // même quand l'appli est fermée. Adresse du programme, remplie à l'installation :
-const MYLIFE_PUSH_URL="";
+const MYLIFE_PUSH_URL="https://hvmfcvjkzgsojijqdqtq.supabase.co/functions/v1/mylife-push";
 const pushSupported=()=>"serviceWorker"in navigator&&"PushManager"in window&&"Notification"in window;
 const isIOS=()=>/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
 const isStandalone=()=>window.matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
