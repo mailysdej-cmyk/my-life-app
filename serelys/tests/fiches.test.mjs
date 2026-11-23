@@ -125,7 +125,10 @@ test('Mise à jour des données v2 → v3 : sauvegarde, puis tâches de départ,
   assert.equal(w[0].kind, 'backup');
   assert.ok(!w.some((x) => x.kind === 'prospect'), 'les prospects ne bougent pas');
   const rec = w.filter((x) => x.kind === 'recurring' && !x.data.routine).map((x) => x.id).sort();
-  assert.deepEqual(rec, ['liste-claude', 'validation-newsletter'], 'ma version modifiée est gardée');
+  assert.deepEqual(rec, ['liste-claude', 'resume-semaine', 'validation-newsletter']);
+  const resume = w.find((x) => x.kind === 'recurring' && x.id === 'resume-semaine').data;
+  assert.equal(resume.title, 'Mon résumé à moi', 'ma version modifiée est gardée');
+  assert.equal(resume.disabled, true, 'mise en pause : remplacée par le point du vendredi');
   const st = w.find((x) => x.kind === 'settings').data;
   assert.equal(st.dataVersion, 4);
   assert.equal(st.libraryUrl, 'https://example.org');

@@ -46,6 +46,7 @@ export function makeContext(state, today) {
     mode: realActive.length ? 'clientes' : 'lancement',
     entrepriseCreated: !!settings.aeCreated || launch.some((x) => x.id === 'entreprise' && x.done),
     siteOnline: !!settings.siteOnline,
+    instagram: !!settings.instagram,
     byId: Object.fromEntries(clients.map((c) => [c.id, c])),
     taskState: state.taskState || {},
     invoiceState: state.invoiceState || {},
@@ -582,7 +583,7 @@ function recurringTasks(ctx, fromYm, toYm) {
   const out = [];
   const from = firstOf(fromYm); const to = lastOf(toYm);
   for (const r of ctx.recurring) {
-    if (!gateOpen(r.gate, ctx)) continue;
+    if (!gateOpen(r.gate, ctx) || (r.instagram && !ctx.instagram)) continue;
     if (r.freq?.type === 'todo') {
       if (r.scope !== 'clients') out.push(makeTask({ key: `r:${r.id}`, mine: true, custom: true, todo: true, noCarry: true, hideDone: true, date: ctx.today,
         title: r.title, note: r.note ? [r.note] : null, link: r.link || null, recurringId: r.id, routine: !!r.routine, order: r.order ?? 99 }));
@@ -606,8 +607,10 @@ function recurringTasks(ctx, fromYm, toYm) {
       }
     } else {
       if (r.clientsOnly && ctx.mode !== 'clientes') continue;
+      // Routine du jour (carte « Ma routine prospection ») : ce qui n'est pas fait ne s'accumule pas en retard
       for (const o of occ) out.push(makeTask({ key: `r:${r.id}:${o.date}`, mine: true, custom: true, date: o.date, due: o.due || null, title: r.title, note,
-        link: (r.link === 'prospection' ? prospectionUrl(ctx) : r.link) || null, recurringId: r.id, routine: !!r.routine, order: r.order ?? 99 }));
+        link: (r.link === 'prospection' ? prospectionUrl(ctx) : r.link) || null, recurringId: r.id, routine: !!r.routine, order: r.order ?? 99,
+        group: r.group || null, short: r.short || null, noCarry: r.group === 'routine' }));
     }
   }
   return out;
@@ -661,9 +664,10 @@ function prospectionTasks(ctx, weeks = 4) {
       const target = d === ctx.today ? Math.max(0, cumPlanned - sentBefore) : planned[i];
       sentBefore += sent;
       if (target <= 0 && sent <= 0) continue;
-      out.push(makeTask({ key: `pm:${d}`, kind: 'prosp', prosp: true, mine: true, noCarry: true, routine: true, order: 1, date: d, target: Math.max(target, sent), sent,
+      out.push(makeTask({ key: `pm:${d}`, kind: 'prosp', prosp: true, mine: true, noCarry: true, routine: true, group: 'routine', order: 1, date: d, target: Math.max(target, sent), sent,
+        short: `Envoyer ${target} nouveau${target > 1 ? 'x' : ''} mail${target > 1 ? 's' : ''}`,
         title: `Envoyer ${target} nouveau${target > 1 ? 'x' : ''} mail${target > 1 ? 's' : ''} de prospection`, link: prospectionUrl(ctx),
-        weekSent: sentWeek, note: [`Cette semaine : ${sentWeek} / ${ps.goal} mails.`] }));
+        weekSent: sentWeek, weekGoal: Number(ps.goal) || 0, note: [`Cette semaine : ${sentWeek} / ${ps.goal} mails.`] }));
     }
   }
   return out;
@@ -686,7 +690,7 @@ function launchTasks(ctx) {
 // La veille d'une visio de découverte ou de signature : relire mes réponses par cœur
 function visioEveTasks(tasks) {
   return tasks.filter((t) => t.kind === 'event' && (/:ob:(visio|signature)$/.test(t.key) || /^p:.*:visio$/.test(t.key))).map((e) => makeTask({
-    key: `rv:${e.key}`, mine: true, custom: true, date: addDays(e.date, -1), openTab: 'cards',
+    key: `rv:${e.key}`, mine: true, custom: true, date: addDays(e.date, -1), openTab: 'cards', expires: e.date,
     title: 'Relire mes réponses par cœur', note: [`Visio demain${e.time ? ` à ${e.time.replace(':', ' h ')}` : ''} : ${e.title.replace(/^Faire la /, '')}.`] }));
 }
 
@@ -734,6 +738,7 @@ export function computeAll(state, today, { monthsAhead = 3 } = {}) {
     t.late = !t.done && !t.noCarry && t.plan < today;
     if (t.noCarry && !t.done && t.plan < today) t.hidden = true;
     if (t.hideDone && t.done && (!t.doneAt || day(t.doneAt) < today)) t.hidden = true;
+    if (t.expires && !t.done && today > t.expires) t.hidden = true; // ex. relire mes réponses : inutile après la visio
     if (t.daily && !t.done && t.date < today) t.hidden = true;
     t.today = !t.done && t.plan === today;
     t.ongoing = false;

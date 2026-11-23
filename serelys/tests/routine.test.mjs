@@ -38,13 +38,16 @@ test('Site en ligne et entreprise créée : la routine complète, dans l’ordre
     'Envoyer 5 nouveaux mails de prospection',
     'Faire les relances de prospection',
     'Ajouter 2 à 4 directrices ou gestionnaires d’établissements petite enfance sur LinkedIn',
-    'Suivre 2 ou 3 comptes de crèches ou de pros de la petite enfance sur Instagram (optionnel)',
     'Passer 10 à 15 min dans les groupes Facebook petite enfance',
     'Créer mon profil LinkedIn',
     'Créer ma fiche Google Business Profile',
     'Rejoindre 3 à 5 groupes Facebook petite enfance',
-    'Créer le compte Instagram Serelys',
-  ]);
+  ], 'Instagram masqué par défaut');
+  s.settings.instagram = true;
+  const withInsta = titles(s, MON);
+  assert.ok(withInsta.includes('Suivre 2 ou 3 comptes de crèches ou de pros de la petite enfance sur Instagram (optionnel)'));
+  assert.ok(withInsta.includes('Créer le compte Instagram Serelys'));
+  s.settings.instagram = false;
   assert.equal(routine[0], 'Envoyer 5 nouveaux mails de prospection');
   assert.equal(routine[1], 'Faire les relances de prospection');
   assert.ok(mon.indexOf('Demander à Claude la liste de la semaine') < mon.indexOf('Envoyer 5 nouveaux mails de prospection'), 'les tâches existantes passent avant la routine');
@@ -82,9 +85,12 @@ test('Mise à jour des données : la routine est ajoutée, rien n’est supprim�
   };
   const w = migrate(items, MON);
   assert.equal(w[0].kind, 'backup');
-  const added = w.filter((x) => x.kind === 'recurring').map((x) => x.id);
+  const added = w.filter((x) => x.kind === 'recurring' && x.data.routine).map((x) => x.id);
   assert.equal(added.length, ROUTINE.length - 1, 'ma version de « post » est gardée');
   assert.ok(!added.includes('resume-semaine'));
+  const paused = w.find((x) => x.id === 'resume-semaine');
+  assert.equal(paused.data.disabled, true, '« Faire le résumé de ma semaine » mis en pause');
+  assert.equal(paused.data.title, 'Faire le résumé de ma semaine');
   assert.ok(!w.some((x) => x.data === null || x.kind === 'prospect'));
   const st = w.find((x) => x.kind === 'settings').data;
   assert.equal(st.siteOnline, false);
@@ -128,6 +134,8 @@ test('La veille d’une visio : relire mes réponses par cœur', () => {
   assert.equal(t.openTab, 'cards');
   assert.match(t.note[0], /Visio demain à 14 h 00 : visio découverte avec la crèche Les Lucioles/);
   assert.match(buildNotification(s, TUE, 'summary').body, /• Relire mes réponses par cœur/);
+  assert.ok(ficheView(computeAll(s, WED), WED, WED).late.some((x) => x.title === 'Relire mes réponses par cœur'), 'pas fait la veille : encore utile le jour de la visio');
+  assert.ok(!ficheView(computeAll(s, THU), THU, THU).late.some((x) => x.title === 'Relire mes réponses par cœur'), 'après la visio : disparaît');
 });
 
 test('Samedi et dimanche : jours souples, pas de rappel à 10 h ni à 12 h', () => {

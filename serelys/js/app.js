@@ -4,7 +4,7 @@ import { computeAll, ficheView, monthCycle, currentLaunchStep, weekMails, prospe
 import { parisNow, fmtDate, fmtShort, day, diffDays, addDays, mondayOf } from './dates.js';
 import { migrate } from './migrate.js';
 import { mergeSettings, CLIENT_COLORS } from './catalog.js';
-import { Icon, TaskRow, Sheet, Field, Input, Select, Toast, PrivacyHint, Check } from './ui.js';
+import { Icon, TaskRow, Sheet, Field, Input, Select, Toast, PrivacyHint, Check, RoutineCard } from './ui.js';
 import { ClientsScreen } from './screens/clients.js';
 import { MoneyScreen } from './screens/money.js';
 import { ProspectsScreen } from './screens/prospects.js';
@@ -17,6 +17,7 @@ const nowISO = () => new Date().toISOString();
 
 let store;
 let migrating = false;
+let toastTimer = null;
 
 function derive(items) {
   const vals = (k) => Object.entries(items[k] || {}).map(([id, d]) => ({ ...d, id }));
@@ -89,14 +90,25 @@ function TodayScreen({ S, all, today, act, openSettings, banners }) {
   useEffect(() => setSel(today), [today]);
   const monday = mondayOf(sel);
   const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
-  const fiche = useMemo(() => ficheView(all, sel, today), [all, sel, today]);
+  const fiche = useMemo(() => {
+    const f = ficheView(all, sel, today);
+    const every = [...f.late, ...f.items];
+    // Ordre fixe : rendez-vous, routine, lancement, puis le reste
+    return { ...f,
+      events: every.filter((t) => t.time),
+      routineDaily: f.items.filter((t) => t.group === 'routine' && !t.time),
+      routineOther: f.items.filter((t) => t.routine && t.group !== 'routine' && !t.time),
+      launchItems: every.filter((t) => t.launch && !t.time),
+      lateRest: f.late.filter((t) => !t.time && !t.launch && !t.routine),
+      rest: f.items.filter((t) => !t.time && !t.routine && !t.launch) };
+  }, [all, sel, today]);
   const count = (d) => ficheView(all, d, today).remaining.length;
   const isToday = sel === today;
   const cyc = monthCycle(today);
   const wm = weekMails(all.ctx, sel);
   const ps = prospectionSettings(all.ctx.settings);
   const prospUrl = ps.url || all.ctx.settings.libraryUrl;
-  const row = (t) => html`<${TaskRow} key=${t.key} t=${t} today=${today} act=${act} />`;
+  const row = (t) => html`<${TaskRow} key=${t.key} t=${t} today=${today} act=${act} day=${sel} />`;
   return html`<div class="screen">
     <div class="topbar"><div><div class="sub">${fmtDate(today)}</div><h1>${isToday ? 'Aujourd’hui' : 'Ma semaine'}</h1></div>
       <button class="icon-btn" onClick=${openSettings} aria-label="Réglages"><${Icon} name="gear" /></button></div>
@@ -129,13 +141,18 @@ function TodayScreen({ S, all, today, act, openSettings, banners }) {
     ${[6, 0].includes(new Date(`${sel}T12:00:00Z`).getUTCDay()) ? html`<div class="banner info"><${Icon} name="leaf" /> Jour souple : pas de fiche obligatoire. Ce qui est listé peut attendre lundi.</div>` : null}
     <div class="section-title"><span>${isToday ? 'Ma fiche du jour' : `Fiche du ${fmtDate(sel)}`}</span>${fiche.total ? html`<span>${fiche.done}/${fiche.total}</span>` : null}</div>
     ${fiche.total ? html`<div class="progress" style="margin:-4px 6px 14px"><span style=${`width:${Math.round((fiche.done / fiche.total) * 100)}%`}></span></div>` : null}
-    ${fiche.late.length ? html`<div class="small" style="margin:0 6px 8px;font-weight:800;color:var(--rose-d)">En retard (pas cochées les jours d’avant)</div><div>${fiche.late.map(row)}</div>` : null}
-    ${fiche.late.length && fiche.items.length ? html`<div class="small muted" style="margin:14px 6px 8px;font-weight:800">Prévu ${isToday ? 'aujourd’hui' : 'ce jour-là'}</div>` : null}
-    <div key=${`fiche-${sel}`}>${fiche.items.filter((t) => !t.routine).map(row)}</div>
-    ${fiche.items.some((t) => t.routine) ? html`<div class="section-title" style="margin-top:18px"><span>Visibilité et prospection</span>
-      <span>${fiche.items.filter((t) => t.routine && t.done).length}/${fiche.items.filter((t) => t.routine).length}</span></div>
-      <div key=${`routine-${sel}`}>${fiche.items.filter((t) => t.routine).map(row)}</div>` : null}
-
+    <div key=${`rdv-${sel}`}>${fiche.events.map(row)}</div>
+    ${fiche.routineDaily.length || fiche.routineOther.length ? html`<div class="section-title" style="margin-top:8px"><span>Ma routine</span></div>` : null}
+    <div key=${`routine-${sel}`}>
+      ${fiche.routineDaily.length ? html`<${RoutineCard} items=${fiche.routineDaily} act=${act} />` : null}
+      ${fiche.routineOther.map(row)}
+    </div>
+    ${fiche.launchItems.length ? html`<div class="section-title" style="margin-top:8px"><span>Mon lancement</span></div>` : null}
+    <div key=${`lancement-${sel}`}>${fiche.launchItems.map(row)}</div>
+    ${fiche.lateRest.length || fiche.rest.length ? html`<div class="section-title" style="margin-top:8px"><span>Le reste</span></div>` : null}
+    ${fiche.lateRest.length ? html`<div class="small" style="margin:0 6px 8px;font-weight:800;color:var(--rose-d)">En retard (pas cochées les jours d’avant)</div>` : null}
+    <div key=${`retard-${sel}`}>${fiche.lateRest.map(row)}</div>
+    <div key=${`reste-${sel}`}>${fiche.rest.map(row)}</div>
     ${!fiche.total ? html`<div class="empty">${isToday ? 'Rien à faire aujourd’hui. Profites-en !' : 'Rien de prévu ce jour-là.'}</div>` : null}
     ${fiche.total && !fiche.remaining.length && isToday ? html`<div class="empty">Tout est coché. Belle journée !</div>` : null}
     <button class="btn small ghost block" style="margin-top:6px" onClick=${() => act.openRecurring()}>Gérer mes tâches récurrentes</button>
@@ -194,11 +211,15 @@ function App() {
 
   const all = useMemo(() => computeAll(S, today, { monthsAhead: 3 }), [S, today]);
 
-  const say = (m) => { setToast(m); clearTimeout(say.t); say.t = setTimeout(() => setToast(''), 2600); };
+  const say = (m) => { setToast(m); clearTimeout(toastTimer); toastTimer = setTimeout(() => setToast(''), 2600); };
+  // Le petit message disparaît quand je change de page
+  useEffect(() => { clearTimeout(toastTimer); setToast(''); }, [tab, clientId, settingsOpen]);
 
   const act = {
     store, S, all, today, say, uid,
     async toggle(t) {
+      if (t.prosp) { await act.setMails(t, t.done ? 0 : t.target); return; }
+      if (t.recurringId === 'routine-post' && !t.done) { await act.publishPost(t); return; }
       if (t.launchId) {
         const done = !t.done;
         await act.saveStep(t.launchId, { done, doneAt: done ? nowISO() : null });

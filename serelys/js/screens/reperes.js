@@ -52,19 +52,22 @@ function PostSheet({ p, next, onClose, onSave, onDelete }) {
   </${Sheet}>`;
 }
 
-// Le post de la semaine, sur la fiche du mardi
+// Le post de la semaine, sur la fiche du mardi : replié par défaut
 export function PostBox({ S, act, t }) {
+  const [open, setOpen] = useState(false);
   const cur = currentPost(S.posts, S.settings.postCursor || 0);
   if (!cur) return html`<div class="small muted" style="margin-top:10px">Ma banque de posts est vide : Réglages › Mes repères › Ma banque de posts.</div>`;
   const { post } = cur;
-  return html`<div class="t-detail" onClick=${(e) => e.stopPropagation()}>
-    <div class="small muted" style="font-weight:800">Post ${post.num} · ${post.title} (${THEMES[post.theme] || 'Le temps'})</div>
-    <p style="white-space:pre-wrap;margin-top:8px">${post.text}</p>
-    ${post.image ? html`<p class="small muted" style="margin-top:8px"><b>Idée d’image :</b> ${post.image}</p>` : null}
-    <div class="row wrap" style="margin-top:10px">
-      <button class="btn small" onClick=${() => act.copy(post.text, 'Texte copié')}>Copier le texte</button>
-      ${post.image ? html`<button class="btn small" onClick=${() => act.copy(post.image, 'Idée d’image copiée')}>Copier l’idée d’image</button>` : null}
-      ${!t.done ? html`<button class="btn small primary" onClick=${() => act.publishPost(t)}><${Icon} name="check" size=${16} stroke=${2.6} /> Publié</button>` : null}
-    </div>
+  return html`<div onClick=${(e) => e.stopPropagation()}>
+    <div class="small" style="margin-top:8px"><b>Post ${post.num} · ${post.title}</b> <span class="muted">(${THEMES[post.theme] || 'Le temps'})</span></div>
+    ${!open ? html`<button class="btn small" style="margin-top:10px" onClick=${() => setOpen(true)}>Voir le post</button>` : html`<div class="t-detail">
+      <p style="white-space:pre-wrap">${post.text}</p>
+      ${post.image ? html`<p class="small muted" style="margin-top:8px"><b>Idée d’image :</b> ${post.image}</p>` : null}
+      <div class="row wrap" style="margin-top:10px">
+        <button class="btn small" onClick=${() => act.copy(post.text, 'Texte copié')}>Copier le texte</button>
+        ${post.image ? html`<button class="btn small" onClick=${() => act.copy(post.image, 'Idée d’image copiée')}>Copier l’idée d’image</button>` : null}
+        ${!t.done ? html`<button class="btn small primary" onClick=${() => act.publishPost(t)}><${Icon} name="check" size=${16} stroke=${2.6} /> Publié</button>` : null}
+        <button class="btn small ghost" onClick=${() => setOpen(false)}>Replier</button>
+      </div></div>`}
   </div>`;
 }

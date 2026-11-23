@@ -30,6 +30,8 @@ export function Avancement({ all, act, S }) {
   return html`<div class="card">
     <${Switch} label="Site en ligne" value=${ctx.siteOnline} onChange=${(v) => act.saveSettings({ siteOnline: v })}>
       <div class="small muted" style="font-weight:600">Débloque LinkedIn, Instagram, Facebook et Google Business.</div></${Switch}>
+    <${Switch} label="Instagram" value=${ctx.instagram} onChange=${(v) => act.saveSettings({ instagram: v })}>
+      <div class="small muted" style="font-weight:600">Affiche les tâches Instagram (masquées par défaut).</div></${Switch}>
     <${Switch} label="Entreprise créée" value=${ctx.entrepriseCreated} onChange=${(v) => setEntreprise(v)}>
       <div class="small muted" style="font-weight:600">Débloque les mails de prospection et les relances.</div></${Switch}>
     ${ctx.entrepriseCreated ? html`<${Field} label="Date de création" hint="Lance le compte à rebours de l’ACRE (60 jours, rappels à J+7, J+30, J+50 et J+58).">
