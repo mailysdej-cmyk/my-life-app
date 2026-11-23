@@ -45,6 +45,7 @@ export function makeContext(state, today) {
     config, settings, today, clients, launch, realActive,
     mode: realActive.length ? 'clientes' : 'lancement',
     entrepriseCreated: !!settings.aeCreated || launch.some((x) => x.id === 'entreprise' && x.done),
+    siteOnline: !!settings.siteOnline,
     byId: Object.fromEntries(clients.map((c) => [c.id, c])),
     taskState: state.taskState || {},
     invoiceState: state.invoiceState || {},
@@ -553,6 +554,8 @@ export function recurringDates(freq = {}, from, to) {
   } else if (freq.type === 'interval' && isDate(freq.start)) {
     const step = Math.max(1, Number(freq.every) || 1) * (freq.unit === 'weeks' ? 7 : 1);
     for (let d = day(freq.start); d <= to; d = addDays(d, step)) if (d >= from) out.push({ date: d });
+  } else if (freq.type === 'todo') {
+    out.push({ date: null });
   } else if (freq.type === 'once' && isDate(freq.date) && inRange(day(freq.date))) {
     out.push({ date: day(freq.date) });
   }
@@ -567,6 +570,7 @@ export function describeFreq(freq = {}) {
     case 'monthly': return freq.rangeFrom ? `Chaque mois, du ${days([freq.rangeFrom])} au ${days([freq.rangeTo || freq.rangeFrom])}` : `Chaque mois, le ${days(freq.monthDays || [])}`;
     case 'interval': return `Tous les ${Number(freq.every) > 1 ? `${freq.every} ` : ''}${freq.unit === 'weeks' ? 'semaines' : 'jours'}${isDate(freq.start) ? ` (à partir du ${fmtShort(freq.start)})` : ''}`;
     case 'once': return isDate(freq.date) ? `Une fois, le ${fmtDate(freq.date)}` : 'Une fois';
+    case 'todo': return 'Une fois, à cocher (disparaît ensuite)';
     default: return '';
   }
 }
@@ -575,6 +579,12 @@ function recurringTasks(ctx, fromYm, toYm) {
   const out = [];
   const from = firstOf(fromYm); const to = lastOf(toYm);
   for (const r of ctx.recurring) {
+    if (!gateOpen(r.gate, ctx)) continue;
+    if (r.freq?.type === 'todo') {
+      if (r.scope !== 'clients') out.push(makeTask({ key: `r:${r.id}`, mine: true, custom: true, todo: true, noCarry: true, hideDone: true, date: ctx.today,
+        title: r.title, note: r.note ? [r.note] : null, link: r.link || null, recurringId: r.id, routine: !!r.routine, order: r.order ?? 99 }));
+      continue;
+    }
     // Une tâche récurrente commence le jour où je la crée : pas de « retard » sur les semaines d'avant
     const since = isDate(r.createdAt) ? maxD(from, day(r.createdAt)) : from;
     const occ = recurringDates(r.freq, since, to).filter((o) => (o.due || o.date) >= since);
@@ -593,11 +603,21 @@ function recurringTasks(ctx, fromYm, toYm) {
       }
     } else {
       if (r.clientsOnly && ctx.mode !== 'clientes') continue;
-      for (const o of occ) out.push(makeTask({ key: `r:${r.id}:${o.date}`, mine: true, custom: true, date: o.date, due: o.due || null, title: r.title, note, link: r.link || null, recurringId: r.id }));
+      for (const o of occ) out.push(makeTask({ key: `r:${r.id}:${o.date}`, mine: true, custom: true, date: o.date, due: o.due || null, title: r.title, note,
+        link: (r.link === 'prospection' ? prospectionUrl(ctx) : r.link) || null, recurringId: r.id, routine: !!r.routine, order: r.order ?? 99 }));
     }
   }
   return out;
 }
+
+// Une tâche peut attendre une étape : 'site' (site en ligne) ou 'entreprise' (entreprise créée).
+export const GATES = { site: 'Quand mon site est en ligne', entreprise: 'Quand mon entreprise est créée' };
+export function gateOpen(gate, ctx) {
+  if (gate === 'site') return ctx.siteOnline;
+  if (gate === 'entreprise') return ctx.entrepriseCreated;
+  return true;
+}
+const prospectionUrl = (ctx) => prospectionSettings(ctx.settings).url || ctx.settings.libraryUrl || null;
 
 // ---------------------------------------------------------------- Prospection : X mails par semaine
 
@@ -617,12 +637,12 @@ export function weekMails(ctx, d) {
   let sent = 0;
   for (let i = 0; i < 7; i++) sent += Number(ctx.taskState[`pm:${addDays(mon, i)}`]?.sent) || 0;
   const ps = prospectionSettings(ctx.settings);
-  return { sent, goal: Number(ps.goal) || 0, missing: Math.max(0, (Number(ps.goal) || 0) - sent), enabled: ps.enabled };
+  return { sent, goal: Number(ps.goal) || 0, missing: Math.max(0, (Number(ps.goal) || 0) - sent), enabled: ps.enabled && ctx.entrepriseCreated };
 }
 
 function prospectionTasks(ctx, weeks = 4) {
   const ps = prospectionSettings(ctx.settings);
-  if (!ps.enabled) return [];
+  if (!ps.enabled || !ctx.entrepriseCreated) return [];
   const out = [];
   const planned = plannedMails(ps);
   for (let w = 0; w < weeks; w++) {
@@ -636,8 +656,8 @@ function prospectionTasks(ctx, weeks = 4) {
       const target = d === ctx.today ? Math.max(0, cumPlanned - sentBefore) : planned[i];
       sentBefore += sent;
       if (target <= 0 && sent <= 0) continue;
-      out.push(makeTask({ key: `pm:${d}`, kind: 'prosp', prosp: true, mine: true, noCarry: true, date: d, target: Math.max(target, sent), sent,
-        title: `Prospection : ${target} mail${target > 1 ? 's' : ''}`, link: ps.url || ctx.settings.libraryUrl || null,
+      out.push(makeTask({ key: `pm:${d}`, kind: 'prosp', prosp: true, mine: true, noCarry: true, routine: true, order: 1, date: d, target: Math.max(target, sent), sent,
+        title: `Envoyer ${target} nouveau${target > 1 ? 'x' : ''} mail${target > 1 ? 's' : ''} de prospection`, link: prospectionUrl(ctx),
         note: [ps.mode === 'bloc' ? `Objectif : ${ps.goal} mails cette semaine, en un bloc.` : `Objectif : ${ps.goal} mails cette semaine, ${Math.round(ps.goal / 5)} par jour.`] }));
     }
   }
@@ -685,6 +705,7 @@ export function computeAll(state, today, { monthsAhead = 3 } = {}) {
     // Pas cochée le jour prévu → sur la fiche du lendemain, « en retard »
     t.late = !t.done && !t.noCarry && t.plan < today;
     if (t.noCarry && !t.done && t.plan < today) t.hidden = true;
+    if (t.hideDone && t.done) t.hidden = true;
     if (t.daily && !t.done && t.date < today) t.hidden = true;
     t.today = !t.done && t.plan === today;
     t.ongoing = false;
@@ -736,8 +757,9 @@ export function ficheView(all, d, today) {
   // Aujourd'hui : aussi ce que j'ai rattrapé (prévu un jour d'avant, coché aujourd'hui)
   const planned = vis.filter((t) => (t.plan === d && !(d === today && t.late))
     || (d === today && t.done && t.plan < d && t.doneAt && day(t.doneAt) === today));
-  const rank = (t) => (t.time ? 1 : t.prosp ? 3 : t.due && t.due === d ? 2 : 4);
-  const sortKey = (t) => `${t.done ? 1 : 0}${rank(t)}${t.time || ''}${t.client?.name || 'zz'}${t.title}`;
+  const rank = (t) => (t.time ? 1 : t.routine ? 4 : t.due && t.due === d ? 2 : 3);
+  const pad2 = (n) => String(n ?? 99).padStart(2, '0');
+  const sortKey = (t) => `${t.done ? 1 : 0}${rank(t)}${t.time || ''}${t.routine ? `${t.todo ? 1 : 0}${pad2(t.order)}` : ''}${t.client?.name || 'zz'}${t.title}`;
   const items = [...planned].sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
   // En retard : d'abord les échéances légales encore tenables, puis du plus ancien au plus récent
   const urgent = (t) => (t.legal && t.due && t.due >= today ? 0 : 1);

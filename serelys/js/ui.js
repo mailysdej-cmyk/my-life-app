@@ -137,6 +137,7 @@ export function TaskRow({ t, today, act, showClient = true, showDate = true }) {
         ${t.blocked && !t.done ? html`<span class="chip rose"><${Icon} name="lock" size=${13} /> Bloqué</span>` : null}
         ${t.done && t.doneAt ? html`<span class="chip sage">Fait le ${fmtShort(day(t.doneAt))}</span>` : null}
         ${t.snoozedUntil && !t.done ? html`<span class="chip blue">Reporté (prévu le ${fmtShort(t.plannedDate)})</span>` : null}
+        ${t.todo ? html`<span class="chip rose">À faire une seule fois</span>` : null}
       </div>
       ${t.prosp && act.setMails ? html`<div class="row wrap" style="margin-top:12px" onClick=${(e) => e.stopPropagation()}>
         <span class="counter"><button class="btn small" onClick=${() => act.setMails(t, t.sent - 1)} aria-label="Un mail de moins">−</button>

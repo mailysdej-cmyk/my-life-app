@@ -9,7 +9,7 @@ import { ClientsScreen } from './screens/clients.js';
 import { MoneyScreen } from './screens/money.js';
 import { ProspectsScreen } from './screens/prospects.js';
 import { CardsScreen } from './screens/cards.js';
-import { SettingsScreen } from './screens/settings.js';
+import { SettingsScreen, WhereIAm } from './screens/settings.js';
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const nowISO = () => new Date().toISOString();
@@ -126,7 +126,11 @@ function TodayScreen({ S, all, today, act, openSettings, banners }) {
     ${fiche.total ? html`<div class="progress" style="margin:-4px 6px 14px"><span style=${`width:${Math.round((fiche.done / fiche.total) * 100)}%`}></span></div>` : null}
     ${fiche.late.length ? html`<div class="small" style="margin:0 6px 8px;font-weight:800;color:var(--rose-d)">En retard (pas cochées les jours d’avant)</div>${fiche.late.map(row)}` : null}
     ${fiche.late.length && fiche.items.length ? html`<div class="small muted" style="margin:14px 6px 8px;font-weight:800">Prévu ${isToday ? 'aujourd’hui' : 'ce jour-là'}</div>` : null}
-    ${fiche.items.map(row)}
+    ${fiche.items.filter((t) => !t.routine).map(row)}
+    ${fiche.items.some((t) => t.routine) ? html`<div class="section-title" style="margin-top:18px"><span>Visibilité et prospection</span>
+      <span>${fiche.items.filter((t) => t.routine && t.done).length}/${fiche.items.filter((t) => t.routine).length}</span></div>
+      ${fiche.items.filter((t) => t.routine).map(row)}` : null}
+    ${isToday && all.mode === 'lancement' && !(all.ctx.siteOnline && all.ctx.entrepriseCreated) ? html`<div style="margin-top:14px"><${WhereIAm} all=${all} act=${act} /></div>` : null}
     ${!fiche.total ? html`<div class="empty">${isToday ? 'Rien à faire aujourd’hui. Profites-en !' : 'Rien de prévu ce jour-là.'}</div>` : null}
     ${fiche.total && !fiche.remaining.length && isToday ? html`<div class="empty">Tout est coché. Belle journée !</div>` : null}
     <button class="btn small ghost block" style="margin-top:6px" onClick=${() => act.openRecurring()}>Gérer mes tâches récurrentes</button>

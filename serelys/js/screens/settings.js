@@ -1,7 +1,7 @@
 import { html, useState, useEffect } from '../../vendor/preact-htm.js';
 import { Icon, Field, Input, TextLine, Seg, Switch, Select, euro, fmtDate } from '../ui.js';
 import { DEFAULT_CONFIG } from '../catalog.js';
-import { describeFreq, prospectionSettings, WEEKDAYS } from '../engine.js';
+import { describeFreq, prospectionSettings, WEEKDAYS, GATES } from '../engine.js';
 import { Sheet, PrivacyHint } from '../ui.js';
 import { enablePush, disablePush, isIOS, isStandalone, pushSupported, thisDeviceId } from '../push.js';
 import { day } from '../dates.js';
@@ -24,7 +24,7 @@ export function SettingsScreen({ S, settings, all, today, act, onBack, initial =
   return html`<div class="screen">
     <div class="topbar"><button class="icon-btn" onClick=${() => (sec ? setSec(null) : onBack())} aria-label="Retour"><${Icon} name="back" /></button>
       <h1 class="grow">${sec ? sections.find((s) => s[0] === sec)[2] : 'Réglages'}</h1></div>
-    ${Cur ? html`<${Cur} ...${S_} />` : html`${sections.map(([id, icon, title, sub]) => html`<button class="card client-card" style="padding:16px" onClick=${() => setSec(id)}>
+    ${Cur ? html`<${Cur} ...${S_} />` : html`<${WhereIAm} all=${all} act=${act} />${sections.map(([id, icon, title, sub]) => html`<button class="card client-card" style="padding:16px" onClick=${() => setSec(id)}>
       <div class="row"><span class="icon-btn" style="box-shadow:none;background:var(--card-2)"><${Icon} name=${icon} /></span>
         <div class="grow"><div style="font-weight:800;font-size:17px">${title}</div><div class="small muted">${sub}</div></div></div></button>`)}
       <${Field} label="Lien de la Bibliothèque Serelys"><${TextLine} type="url" value=${settings.libraryUrl} onChange=${(v) => save({ libraryUrl: v })} placeholder="https://…" /></${Field}>
@@ -231,7 +231,23 @@ function Security({ act }) {
 
 // ---------------------------------------------------------------- Mes tâches récurrentes
 
-const FREQ_TYPES = [['daily', 'Tous les jours'], ['weekdays', 'Certains jours'], ['monthly', 'Chaque mois'], ['interval', 'Tous les X'], ['once', 'Une fois']];
+const FREQ_TYPES = [['daily', 'Tous les jours'], ['weekdays', 'Certains jours'], ['monthly', 'Chaque mois'], ['interval', 'Tous les X'], ['once', 'Une fois, à une date'], ['todo', 'Une fois, sans date (à cocher)']];
+
+// Où j'en suis : deux réglages simples qui débloquent la routine « visibilité et prospection »
+export function WhereIAm({ all, act }) {
+  const { ctx } = all;
+  const setEntreprise = async (v) => {
+    await act.saveSettings({ aeCreated: v });
+    if (all.launch.some((x) => x.id === 'entreprise')) await act.saveStep('entreprise', { done: v, doneAt: v ? new Date().toISOString() : null });
+  };
+  return html`<div class="card">
+    <h2><${Icon} name="leaf" size=${20} /> Où j’en suis</h2>
+    <${Switch} label="Site en ligne" value=${ctx.siteOnline} onChange=${(v) => act.saveSettings({ siteOnline: v })}>
+      <div class="small muted" style="font-weight:600">Débloque LinkedIn, Instagram, Facebook et Google Business.</div></${Switch}>
+    <${Switch} label="Entreprise créée" value=${ctx.entrepriseCreated} onChange=${setEntreprise}>
+      <div class="small muted" style="font-weight:600">Débloque les mails de prospection et les relances.</div></${Switch}>
+  </div>`;
+}
 const PLANS = [['essentiel', 'Essentiel'], ['confort', 'Confort'], ['premium', 'Premium']];
 
 function Recurring({ S, act, today }) {
@@ -242,7 +258,7 @@ function Recurring({ S, act, today }) {
     <button class="btn primary block" style="margin-bottom:16px" onClick=${() => setEdit(null)}><${Icon} name="plus" /> Ajouter une tâche récurrente</button>
     ${list.length ? list.map((r) => html`<button class="card client-card flat" style="padding:14px 16px;margin-bottom:12px" onClick=${() => setEdit(r)}>
       <div style="font-weight:800">${(r.title || '').replace('{creche}', '[la crèche]')}</div>
-      <div class="small muted" style="margin-top:4px">${describeFreq(r.freq)} · ${r.scope === 'clients' ? `pour chaque cliente${r.plans?.length && r.plans.length < 3 ? ` (${r.plans.map((x) => PLANS.find((p) => p[0] === x)?.[1]).join(', ')})` : ''}` : r.clientsOnly ? 'pour moi, seulement avec des clientes' : 'pour moi'}${r.disabled ? ' · en pause' : ''}</div>
+      <div class="small muted" style="margin-top:4px">${describeFreq(r.freq)} · ${r.scope === 'clients' ? `pour chaque cliente${r.plans?.length && r.plans.length < 3 ? ` (${r.plans.map((x) => PLANS.find((p) => p[0] === x)?.[1]).join(', ')})` : ''}` : r.clientsOnly ? 'pour moi, seulement avec des clientes' : 'pour moi'}${r.gate ? ` · ${GATES[r.gate].toLowerCase()}` : ''}${r.disabled ? ' · en pause' : ''}</div>
     </button>`) : html`<div class="empty">Aucune tâche récurrente.</div>`}
     ${edit !== undefined ? html`<${RecurringSheet} r=${edit} today=${today} onClose=${() => setEdit(undefined)}
       onDelete=${async () => { await act.store.remove('recurring', edit.id); setEdit(undefined); act.say('Tâche supprimée'); }}
@@ -268,6 +284,7 @@ function RecurringSheet({ r, today, onClose, onSave, onDelete }) {
     if (f.type === 'interval') { fr.every = Math.max(1, Number(f.every) || 1); fr.unit = f.unit; fr.start = f.start || today; }
     if (f.type === 'once') fr.date = f.date || today;
     return { title: v.title.trim(), scope: v.scope, plans: v.scope === 'clients' ? v.plans : undefined, clientsOnly: v.scope === 'me' ? !!v.clientsOnly : undefined,
+      gate: v.gate || null, routine: !!v.routine, order: v.order ?? (v.routine ? 6 : undefined),
       note: v.note.trim() || undefined, link: v.link.trim() || undefined, disabled: !!v.disabled, freq: fr, createdAt: r?.createdAt || new Date().toISOString() };
   };
   const ok = v.title.trim() && (f.type !== 'weekdays' || (f.weekdays || []).length) && (v.scope !== 'clients' || v.plans.length);
@@ -279,6 +296,10 @@ function RecurringSheet({ r, today, onClose, onSave, onDelete }) {
       <button class=${`chip ${v.plans.includes(k) ? 'sage' : ''}`} onClick=${() => set('plans')(toggle(v.plans, k))} aria-pressed=${v.plans.includes(k)}>${l}</button>`)}</div></${Field}>
       <p class="small muted" style="margin:-6px 4px 14px">Elle n’apparaît que quand j’ai des clientes.</p>`
       : html`<${Switch} label="Seulement quand j’ai des clientes" value=${!!v.clientsOnly} onChange=${set('clientsOnly')} />`}
+    <${Field} label="Afficher"><select class="input" value=${v.gate || ''} onChange=${(e) => set('gate')(e.target.value || null)}>
+      <option value="" selected=${!v.gate}>Tout de suite</option>
+      ${Object.entries(GATES).map(([k, l]) => html`<option value=${k} selected=${v.gate === k}>${l}</option>`)}</select></${Field}>
+    <${Switch} label="Fait partie de « Visibilité et prospection »" value=${!!v.routine} onChange=${set('routine')} />
     <${Field} label="Fréquence"><select class="input" value=${f.type} onChange=${(e) => setF('type')(e.target.value)}>${FREQ_TYPES.map(([k, l]) => html`<option value=${k} selected=${f.type === k}>${l}</option>`)}</select></${Field}>
     ${f.type === 'weekdays' ? html`<div class="row wrap" style="gap:6px;margin-bottom:14px">${WEEKDAYS.map((w, i) => html`
       <button class=${`chip ${(f.weekdays || []).includes(i + 1) ? 'sage' : ''}`} onClick=${() => setF('weekdays')(toggle(f.weekdays || [], i + 1))} aria-pressed=${(f.weekdays || []).includes(i + 1)}>${w}</button>`)}</div>` : null}
