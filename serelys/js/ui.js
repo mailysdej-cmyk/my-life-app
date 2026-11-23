@@ -1,5 +1,5 @@
 // Petits composants partagés : icônes arrondies, champs, feuilles, ligne de tâche.
-import { html, useState, useEffect } from '../vendor/preact-htm.js';
+import { html, useState, useEffect, useRef } from '../vendor/preact-htm.js';
 import { fmtDate, fmtShort, day } from './dates.js';
 import { euro } from './engine.js';
 import { PostBox } from './screens/reperes.js';
@@ -62,8 +62,67 @@ export function Field({ label, children, hint }) {
 export const PrivacyHint = () => html`<div class="privacy"><${Icon} name="shield" size=${14} /> Pas de nom d’enfant ni d’info de santé ici</div>`;
 
 export function Input({ value, onChange, type = 'text', placeholder, ...rest }) {
+  if (type === 'date') return html`<${DateText} value=${value} onChange=${onChange} />`;
+  if (type === 'time') return html`<${TimeText} value=${value} onChange=${onChange} />`;
+  if (type === 'datetime-local') return html`<${DateTimeText} value=${value} onChange=${onChange} />`;
   return html`<input class="input" type=${type} value=${value ?? ''} placeholder=${placeholder}
     onInput=${(e) => onChange(e.target.value)} ...${rest} />`;
+}
+
+// ---------------------------------------------------------------- Dates au format français (16/11/2026)
+
+const pad2 = (n) => String(n).padStart(2, '0');
+export const toFrDate = (iso) => (iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
+export function parseFrDate(txt) {
+  const t = String(txt || '').trim();
+  if (!t) return '';
+  let d; let m; let y;
+  const parts = t.split(/[^0-9]+/).filter(Boolean);
+  if (parts.length >= 3) [d, m, y] = parts;
+  else if (/^\d{6}$|^\d{8}$/.test(t)) { d = t.slice(0, 2); m = t.slice(2, 4); y = t.slice(4); }
+  else return null;
+  y = Number(y); if (y < 100) y += 2000;
+  d = Number(d); m = Number(m);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (!y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+  return `${y}-${pad2(m)}-${pad2(d)}`;
+}
+export function parseTime(txt) {
+  const t = String(txt || '').trim().toLowerCase();
+  if (!t) return '';
+  const m = t.match(/^(\d{1,2})\s*(?:[:h.]\s*(\d{1,2})?)?$/) || t.match(/^(\d{2})(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]); const mi = Number(m[2] || 0);
+  return h < 24 && mi < 60 ? `${pad2(h)}:${pad2(mi)}` : null;
+}
+
+function DateText({ value, onChange }) {
+  const iso = value ? String(value).slice(0, 10) : '';
+  const [txt, setTxt] = useState(toFrDate(iso));
+  useEffect(() => setTxt(toFrDate(iso)), [iso]);
+  const commit = () => { const v = parseFrDate(txt); if (v === null) setTxt(toFrDate(iso)); else if (v !== iso) onChange(v); };
+  return html`<div class="datefield">
+    <input class="input" inputmode="numeric" placeholder="jj/mm/aaaa" value=${txt} onInput=${(e) => setTxt(e.target.value)} onBlur=${commit}
+      onKeyDown=${(e) => e.key === 'Enter' && e.target.blur()} aria-label="Date (jj/mm/aaaa)" />
+    <span class="datepick" aria-label="Choisir dans le calendrier"><${Icon} name="calendar" size=${20} />
+      <input type="date" lang="fr" tabindex="-1" value=${iso} onChange=${(e) => onChange(e.target.value)} aria-label="Calendrier" /></span>
+  </div>`;
+}
+
+function TimeText({ value, onChange }) {
+  const [txt, setTxt] = useState(value || '');
+  useEffect(() => setTxt(value || ''), [value]);
+  const commit = () => { const v = parseTime(txt); if (v === null) setTxt(value || ''); else { setTxt(v); if (v !== (value || '')) onChange(v); } };
+  return html`<input class="input" inputmode="numeric" placeholder="hh:mm" value=${txt} onInput=${(e) => setTxt(e.target.value)} onBlur=${commit}
+    onKeyDown=${(e) => e.key === 'Enter' && e.target.blur()} aria-label="Heure (hh:mm)" />`;
+}
+
+function DateTimeText({ value, onChange }) {
+  const d = value ? String(value).slice(0, 10) : '';
+  const t = value && String(value).length > 10 ? String(value).slice(11, 16) : '';
+  const emit = (nd, nt) => onChange(nd ? (nt ? `${nd}T${nt}` : nd) : '');
+  return html`<div class="row" style="gap:8px"><div class="grow"><${DateText} value=${d} onChange=${(v) => emit(v, t)} /></div>
+    <div style="width:96px"><${TimeText} value=${t} onChange=${(v) => emit(d, v)} /></div></div>`;
 }
 
 export function Text({ value, onChange, placeholder, privacy = true }) {

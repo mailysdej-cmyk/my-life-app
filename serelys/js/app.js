@@ -211,7 +211,7 @@ function App() {
 
   const all = useMemo(() => computeAll(S, today, { monthsAhead: 3 }), [S, today]);
 
-  const say = (m) => { setToast(m); clearTimeout(toastTimer); toastTimer = setTimeout(() => setToast(''), 2600); };
+  const say = (m) => { setToast(m); clearTimeout(toastTimer); toastTimer = setTimeout(() => setToast(''), 3000); };
   // Le petit message disparaît quand je change de page
   useEffect(() => { clearTimeout(toastTimer); setToast(''); }, [tab, clientId, settingsOpen]);
 

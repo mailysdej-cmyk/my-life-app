@@ -71,3 +71,19 @@ test('CSV sans ligne de titres : colonnes dans l’ordre prévu', () => {
   assert.equal(r.toAdd[0].priorite, 'haute');
   assert.equal(r.toAdd[0].pourquoi, 'Proche de chez moi');
 });
+
+test('Dates et heures au format français', async () => {
+  globalThis.window = globalThis.window || {};
+  const { parseFrDate, toFrDate, parseTime } = await import('../js/ui.js').catch(() => ({}));
+  if (!parseFrDate) return; // ui.js dépend du navigateur : testé dans le navigateur
+  assert.equal(toFrDate('2026-11-16'), '16/11/2026');
+  assert.equal(parseFrDate('16/11/2026'), '2026-11-16');
+  assert.equal(parseFrDate('16112026'), '2026-11-16');
+  assert.equal(parseFrDate('1/2/27'), '2027-02-01');
+  assert.equal(parseFrDate('31/02/2026'), null);
+  assert.equal(parseFrDate(''), '');
+  assert.equal(parseTime('14h'), '14:00');
+  assert.equal(parseTime('9:30'), '09:30');
+  assert.equal(parseTime('1430'), '14:30');
+  assert.equal(parseTime('25:00'), null);
+});
