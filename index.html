@@ -106,6 +106,50 @@ function buildCycle(periods){
 }
 function dStr(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
 function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
+const REPEATS=[{key:"none",label:"Jamais"},{key:"daily",label:"Chaque jour"},{key:"weekly",label:"Chaque semaine"},{key:"monthly",label:"Chaque mois"},{key:"yearly",label:"Chaque année"}];
+const REMINDERS=[{min:0,label:"À l'heure"},{min:15,label:"15 min avant"},{min:60,label:"1 h avant"},{min:1440,label:"La veille"}];
+// Un événement a-t-il lieu ce jour-là (date "AAAA-MM-JJ") ? Gère les répétitions et les dates retirées.
+function occursOn(ev,ds){
+  if(ds===ev.date)return true;
+  if(!ev.repeat||ev.repeat==="none"||ds<ev.date)return false;
+  if(ev.skip&&ev.skip.includes(ds))return false;
+  const [y,m,d]=ev.date.split("-").map(Number),[y2,m2,d2]=ds.split("-").map(Number);
+  if(ev.repeat==="daily")return true;
+  if(ev.repeat==="weekly")return Math.round((Date.UTC(y2,m2-1,d2)-Date.UTC(y,m-1,d))/86400000)%7===0;
+  if(ev.repeat==="monthly")return d2===d;
+  if(ev.repeat==="yearly")return d2===d&&m2===m;
+  return false;
+}
+// Fichier .ics (avec répétition et alarme) : le Calendrier de l'iPhone se charge de la notification
+function icsFor(ev){
+  const p2=n=>String(n).padStart(2,"0");
+  const esc=t=>String(t).replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");
+  const stamp=(ds,h,mi)=>ds.replace(/-/g,"")+"T"+p2(h)+p2(mi)+"00";
+  const start=new Date(ev.date+"T00:00:00");start.setHours(ev.hour,ev.min||0);
+  const end=ev.endHour!=null?new Date(ev.date+"T00:00:00"):new Date(start.getTime()+3600000);
+  if(ev.endHour!=null){end.setHours(ev.endHour,ev.endMin||0);if(end<=start)end.setTime(start.getTime()+3600000);}
+  const now=new Date();
+  const utc=now.getUTCFullYear()+p2(now.getUTCMonth()+1)+p2(now.getUTCDate())+"T"+p2(now.getUTCHours())+p2(now.getUTCMinutes())+p2(now.getUTCSeconds())+"Z";
+  const trig=ev.reminder===0?"PT0M":ev.reminder%1440===0?`-P${ev.reminder/1440}D`:ev.reminder%60===0?`-PT${ev.reminder/60}H`:`-PT${ev.reminder}M`;
+  const freq={daily:"DAILY",weekly:"WEEKLY",monthly:"MONTHLY",yearly:"YEARLY"}[ev.repeat];
+  const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//My Life//FR","CALSCALE:GREGORIAN","BEGIN:VEVENT",
+    `UID:mylife-${ev.id}@mylife`,`DTSTAMP:${utc}`,
+    `DTSTART:${stamp(ev.date,ev.hour,ev.min||0)}`,`DTEND:${stamp(dStr(end),end.getHours(),end.getMinutes())}`,
+    `SUMMARY:${esc(ev.title)}`];
+  if(freq)lines.push(`RRULE:FREQ=${freq}`);
+  if(freq&&ev.skip&&ev.skip.length)lines.push(`EXDATE:${ev.skip.map(d=>stamp(d,ev.hour,ev.min||0)).join(",")}`);
+  if(ev.reminder!=null)lines.push("BEGIN:VALARM","ACTION:DISPLAY",`DESCRIPTION:${esc(ev.title)}`,`TRIGGER:${trig}`,"END:VALARM");
+  lines.push("END:VEVENT","END:VCALENDAR");
+  return lines.join("\r\n")+"\r\n";
+}
+function openInPhoneCalendar(ev){
+  const ics=icsFor(ev);
+  const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  if(ios){window.location.href="data:text/calendar;charset=utf-8,"+encodeURIComponent(ics);return;}
+  const url=URL.createObjectURL(new Blob([ics],{type:"text/calendar"}));
+  const a=document.createElement("a");a.href=url;a.download=(ev.title||"evenement").replace(/[^\p{L}\p{N} -]/gu,"").trim()+".ics";
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
 function sameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
 function getMonDay(d){const day=d.getDay();return day===0?6:day-1;}
 function getDIM(y,m){return new Date(y,m+1,0).getDate();}
@@ -242,11 +286,16 @@ const css=`
 .mmd.mto{background:linear-gradient(135deg,${MAUVE},${R});color:white;font-weight:600;}
 .mmd.mot{color:#ddd;}
 .overlay{position:fixed;inset:0;background:rgba(58,37,53,0.42);z-index:200;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(3px);}
-.modal{background:white;border-radius:26px 20px 0 0;padding:22px 20px 34px;width:100%;max-width:430px;animation:sup .26s ease;}
+.modal{background:white;border-radius:26px 20px 0 0;padding:22px 20px 34px;width:100%;max-width:430px;animation:sup .26s ease;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 @keyframes sup{from{transform:translateY(100%);}to{transform:translateY(0);}}
 .mod-title{font-family:'Quicksand',sans-serif;font-weight:600;font-size:18px;color:${DARK};margin-bottom:15px;text-align:center;}
 .minput{width:100%;padding:10px 13px;border:1px solid ${BLUSH};border-radius:16px;font-family:'Jost',sans-serif;font-size:13px;color:${DARK};background:${CREAM};margin-bottom:9px;outline:none;}
 .minput:focus{border-color:${R};}
+.opt-pick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.opt{padding:7px 12px;border-radius:999px;border:1px solid ${BLUSH};background:${CREAM};color:${MAUVE};font-size:11.5px;cursor:pointer;font-family:'Jost',sans-serif;transition:all .15s;}
+.opt.sel{background:linear-gradient(135deg,${MAUVE},${R});color:white;border-color:transparent;}
+.ev-flags{display:inline-flex;gap:3px;margin-left:5px;vertical-align:-1px;opacity:.7;}
+.ics-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px;border-radius:17px;border:1px dashed ${GOLD};background:${BLUSH}55;color:${MAUVE};font-family:'Jost',sans-serif;font-size:12px;cursor:pointer;margin-bottom:12px;}
 .cpick{display:flex;gap:8px;margin-bottom:15px;}
 .cdot{width:24px;height:24px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .15s;}
 .cdot.sel{transform:scale(1.2);border-color:${DARK};}
@@ -478,6 +527,8 @@ function Icon({name,size=16,strokeWidth=1.8,style}){
     case "music":return(<svg {...p}><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>);
     case "bed":return(<svg {...p}><path d="M3 18.5V6.5M3 14h18v4.5M21 14v-2.5a3 3 0 0 0-3-3h-7V14"/><circle cx="7" cy="11" r="1.8"/></svg>);
     case "apple":return(<svg {...p}><path d="M12 8c-1.6-1-5-1.1-6.2 1.9-1.3 3.1.4 7.5 2.4 9.3 1.2 1.1 2.3.8 3.8.2 1.5.6 2.6.9 3.8-.2 2-1.8 3.7-6.2 2.4-9.3C17 6.9 13.6 7 12 8z"/><path d="M12 8c0-2 1-3.6 3-4.2"/></svg>);
+    case "bell":return(<svg {...p}><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>);
+    case "repeat":return(<svg {...p}><path d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H19M16 3l3 3-3 3"/><path d="M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H5M8 21l-3-3 3-3"/></svg>);
     case "trash":return(<svg {...p}><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>);
     case "pill":return(<svg {...p}><path d="M10.5 20.5a4.95 4.95 0 0 1-7-7l6-6a4.95 4.95 0 0 1 7 7z"/><path d="M7.5 10.5l6 6"/></svg>);
     default:return null;
@@ -514,6 +565,8 @@ function App(){
   const[curHabitDate,setCurHabitDate]=useState(new Date(TODAY));
   const[todoInput,setTodoInput]=useState("");
   const[modal,setModal]=useState(null);
+  const[evDel,setEvDel]=useState(null);
+  const[icsAsk,setIcsAsk]=useState(null);
   const[form,setForm]=useState({title:"",hour:"09",min:"00",endHour:"",endMin:"",color:"pink"});
   const[editingTodo,setEditingTodo]=useState(null);
   const[habitModal,setHabitModal]=useState(false);
@@ -579,9 +632,9 @@ function App(){
 
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),2000);};
   const selStr=dStr(curDate);
-  const dayEvs=events.filter(e=>e.date===selStr).sort((a,b)=>a.hour*60+a.min-(b.hour*60+b.min));
+  const dayEvs=events.filter(e=>occursOn(e,selStr)).sort((a,b)=>a.hour*60+a.min-(b.hour*60+b.min));
   const isToday=d=>sameDay(d,TODAY);
-  const hasEv=(y,m,d)=>events.some(e=>e.date===`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`);
+  const hasEv=(y,m,d)=>{const ds=`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;return events.some(e=>occursOn(e,ds));};
   const getWkStart=date=>{const d=new Date(date),day=d.getDay(),diff=day===0?-6:1-day;d.setDate(d.getDate()+diff);return d;};
   const wkStart=getWkStart(curDate);
   const wkDays=Array.from({length:7},(_,i)=>addDays(wkStart,i));
@@ -609,18 +662,33 @@ function App(){
   const toggleTodo=id=>setTodos(t=>t.map(x=>x.id===id?{...x,done:!x.done}:x));
   const delTodo=id=>setTodos(t=>t.filter(x=>x.id!==id));
   const saveTodoEdit=(id,val)=>{const txt=noEmoji(val);if(txt)setTodos(t=>t.map(x=>x.id===id?{...x,text:txt}:x));setEditingTodo(null);};
-  const openAdd=()=>{setForm({title:"",hour:"09",min:"00",endHour:"",endMin:"",color:"pink"});setModal({mode:"add"});};
-  const openEdit=(ev,e)=>{e.stopPropagation();setForm({title:ev.title,hour:String(ev.hour).padStart(2,"0"),min:String(ev.min||0).padStart(2,"0"),endHour:ev.endHour!=null?String(ev.endHour).padStart(2,"0"):"",endMin:ev.endHour!=null?String(ev.endMin||0).padStart(2,"0"):"",color:ev.color});setModal({mode:"edit",ev});};
+  const openAdd=()=>{setForm({title:"",hour:"09",min:"00",endHour:"",endMin:"",color:"pink",repeat:"none",reminder:null});setModal({mode:"add"});};
+  const openEdit=(ev,e)=>{e.stopPropagation();setForm({title:ev.title,hour:String(ev.hour).padStart(2,"0"),min:String(ev.min||0).padStart(2,"0"),endHour:ev.endHour!=null?String(ev.endHour).padStart(2,"0"):"",endMin:ev.endHour!=null?String(ev.endMin||0).padStart(2,"0"):"",color:ev.color,repeat:ev.repeat||"none",reminder:ev.reminder??null});setModal({mode:"edit",ev,occ:selStr});};
   const saveEv=()=>{
     const title=noEmoji(form.title);
     if(!title)return;
     const hasEnd=form.endHour!=="";
     const extra=hasEnd?{endHour:parseInt(form.endHour),endMin:parseInt(form.endMin||0)}:{endHour:null,endMin:null};
-    if(modal.mode==="add")setEvents(ev=>[...ev,{id:Date.now(),date:selStr,hour:parseInt(form.hour),min:parseInt(form.min),title,color:form.color,...extra}]);
-    else setEvents(ev=>ev.map(e=>e.id===modal.ev.id?{...e,title,hour:parseInt(form.hour),min:parseInt(form.min),color:form.color,...extra}:e));
+    const fields={title,hour:parseInt(form.hour)||0,min:parseInt(form.min)||0,color:form.color,repeat:form.repeat||"none",reminder:form.reminder,...extra};
+    let saved;
+    if(modal.mode==="add"){saved={id:Date.now(),date:selStr,...fields};setEvents(ev=>[...ev,saved]);}
+    else{saved={...modal.ev,...fields};setEvents(ev=>ev.map(e=>e.id===modal.ev.id?saved:e));}
     setModal(null);
+    // Rappel demandé : on propose de l'ajouter au Calendrier de l'iPhone, qui enverra la notification
+    const changed=modal.mode==="add"||modal.ev.reminder!==fields.reminder||modal.ev.hour!==fields.hour||modal.ev.min!==fields.min||(modal.ev.repeat||"none")!==fields.repeat||modal.ev.title!==title;
+    if(fields.reminder!=null&&changed)setIcsAsk(saved);
   };
-  const delEv=()=>{setEvents(ev=>ev.filter(e=>e.id!==modal.ev.id));setModal(null);};
+  // Supprimer : pour un événement qui se répète, on choisit « cette fois » ou « toute la série »
+  const askDelEv=(ev,occ)=>{if(ev.repeat&&ev.repeat!=="none")setEvDel({ev,occ});else{setEvents(es=>es.filter(x=>x.id!==ev.id));setModal(null);}};
+  const delEv=()=>askDelEv(modal.ev,modal.occ);
+  const delEvOnce=()=>{const{ev,occ}=evDel;
+    if(occ===ev.date){
+      // première date : on avance le début de la série à l'occurrence suivante
+      let n=addDays(parseD(occ),1);for(let i=0;i<800&&!occursOn(ev,dStr(n));i++)n=addDays(n,1);
+      setEvents(es=>es.map(x=>x.id===ev.id?{...x,date:dStr(n)}:x));}
+    else setEvents(es=>es.map(x=>x.id===ev.id?{...x,skip:[...(x.skip||[]),occ]}:x));
+    setEvDel(null);setModal(null);showToast("Supprimé pour cette fois");};
+  const delEvAll=()=>{setEvents(es=>es.filter(x=>x.id!==evDel.ev.id));setEvDel(null);setModal(null);showToast("Série supprimée");};
   const toggleHabit=id=>{
     const ds=dStr(curHabitDate);
     setHabitChecks(hc=>{
@@ -919,8 +987,8 @@ function App(){
                           const c=colCfg(ev.color);
                           return(
                             <div key={ev.id} className="epill" style={{background:c.light,color:c.text,borderLeft:`3px solid ${c.hex}`}} onClick={e=>openEdit(ev,e)}>
-                              <span>{ev.title}{ev.endHour!=null&&<span className="ev-time-tag"> · {String(ev.hour).padStart(2,"0")}:{String(ev.min).padStart(2,"0")}–{String(ev.endHour).padStart(2,"0")}:{String(ev.endMin).padStart(2,"0")}</span>}</span>
-                              <button className="edel" onClick={e=>{e.stopPropagation();setEvents(es=>es.filter(x=>x.id!==ev.id));}}><Icon name="x" size={12}/></button>
+                              <span>{ev.title}{(ev.repeat&&ev.repeat!=="none"||ev.reminder!=null)&&<span className="ev-flags">{ev.repeat&&ev.repeat!=="none"&&<Icon name="repeat" size={10}/>}{ev.reminder!=null&&<Icon name="bell" size={10}/>}</span>}{ev.endHour!=null&&<span className="ev-time-tag"> · {String(ev.hour).padStart(2,"0")}:{String(ev.min).padStart(2,"0")}–{String(ev.endHour).padStart(2,"0")}:{String(ev.endMin).padStart(2,"0")}</span>}</span>
+                              <button className="edel" onClick={e=>{e.stopPropagation();askDelEv(ev,selStr);}}><Icon name="x" size={12}/></button>
                             </div>
                           );
                         })}
@@ -954,7 +1022,7 @@ function App(){
                       <div key={`t${h}`} className="wtl">{String(h).padStart(2,"0")}</div>,
                       ...wkDays.map((d,i)=>{
                         const ds=dStr(d);
-                        const ev=events.find(e=>e.date===ds&&e.hour===h);
+                        const ev=events.find(e=>e.hour===h&&occursOn(e,ds));
                         const c=ev?colCfg(ev.color):null;
                         return(
                           <div key={`c${h}${i}`} className="wcell" onClick={()=>{setCurDate(d);setCalView("day");}}>
@@ -1379,11 +1447,48 @@ function App(){
             </div>
             <div style={{fontSize:10,color:"#bbb",letterSpacing:".4px",marginBottom:7}}>Couleur</div>
             <div className="cpick">{COLORS.map(c=><div key={c.key} className={`cdot ${form.color===c.key?"sel":""}`} style={{background:c.hex}} onClick={()=>setForm({...form,color:c.key})}/>)}</div>
+            <div style={{fontSize:10,color:"#bbb",letterSpacing:".4px",marginBottom:7,display:"flex",alignItems:"center",gap:4}}><Icon name="repeat" size={11}/> Revient</div>
+            <div className="opt-pick">{REPEATS.map(r=><button key={r.key} className={`opt${(form.repeat||"none")===r.key?" sel":""}`} onClick={()=>setForm({...form,repeat:r.key})}>{r.label}</button>)}</div>
+            <div style={{fontSize:10,color:"#bbb",letterSpacing:".4px",marginBottom:7,display:"flex",alignItems:"center",gap:4}}><Icon name="bell" size={11}/> Rappel</div>
+            <div className="opt-pick">
+              <button className={`opt${form.reminder==null?" sel":""}`} onClick={()=>setForm({...form,reminder:null})}>Non</button>
+              <button className={`opt${form.reminder!=null?" sel":""}`} onClick={()=>setForm({...form,reminder:form.reminder??15})}>Oui</button>
+            </div>
+            {form.reminder!=null&&<div className="opt-pick" style={{marginTop:-4}}>{REMINDERS.map(r=><button key={r.min} className={`opt${form.reminder===r.min?" sel":""}`} onClick={()=>setForm({...form,reminder:r.min})}>{r.label}</button>)}</div>}
+            {modal.mode==="edit"&&modal.ev.reminder!=null&&<button className="ics-btn" onClick={()=>openInPhoneCalendar(modal.ev)}><Icon name="bell" size={13}/> Remettre le rappel dans le Calendrier de l'iPhone</button>}
             <div className="macts">
               {modal.mode==="edit"&&<button className="bdel" onClick={delEv}>Supprimer</button>}
               <button className="bcanc" onClick={()=>setModal(null)}>Annuler</button>
               <button className="bsave" onClick={saveEv}>Enregistrer</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {evDel&&(
+        <div className="overlay" style={{zIndex:210}} onClick={()=>setEvDel(null)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div className="mod-title">Supprimer « {evDel.ev.title} » ?</div>
+            <div style={{fontSize:11,color:"#aaa",marginBottom:14,textAlign:"center",lineHeight:1.5}}>Cet événement revient {REPEATS.find(r=>r.key===evDel.ev.repeat).label.toLowerCase()}.</div>
+            <button className="bcanc" style={{width:"100%",marginBottom:8,color:MAUVE}} onClick={delEvOnce}>Seulement le {parseD(evDel.occ).toLocaleDateString("fr-FR",{day:"numeric",month:"long"})}</button>
+            <div className="macts">
+              <button className="bcanc" onClick={()=>setEvDel(null)}>Annuler</button>
+              <button className="bdel" style={{flex:2}} onClick={delEvAll}>Toute la série</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {icsAsk&&(
+        <div className="overlay" style={{zIndex:210}} onClick={()=>setIcsAsk(null)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"center",color:MAUVE,marginBottom:8}}><Icon name="bell" size={26}/></div>
+            <div className="mod-title" style={{marginBottom:8}}>Recevoir le rappel sur ton iPhone</div>
+            <div style={{fontSize:11.5,color:"#999",marginBottom:16,textAlign:"center",lineHeight:1.55}}>
+              Appuie sur le bouton puis sur <b style={{color:MAUVE}}>Ajouter</b> : « {icsAsk.title} » ira dans le Calendrier de ton iPhone avec son rappel ({REMINDERS.find(r=>r.min===icsAsk.reminder)?.label.toLowerCase()}){icsAsk.repeat&&icsAsk.repeat!=="none"?` et sa répétition (${REPEATS.find(r=>r.key===icsAsk.repeat).label.toLowerCase()})`:""}. C'est lui qui t'enverra la notification, même si My Life est fermée.
+            </div>
+            <button className="bsave" style={{width:"100%",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"center",gap:7}} onClick={()=>{openInPhoneCalendar(icsAsk);setIcsAsk(null);}}><Icon name="calendar" size={14}/> Ajouter au Calendrier de l'iPhone</button>
+            <button className="bcanc" style={{width:"100%"}} onClick={()=>setIcsAsk(null)}>Plus tard</button>
           </div>
         </div>
       )}
