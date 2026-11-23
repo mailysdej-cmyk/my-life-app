@@ -1,7 +1,8 @@
 // Petits composants partagés : icônes arrondies, champs, feuilles, ligne de tâche.
-import { html, useState, useEffect } from '../vendor/preact-htm.js';
+import { html, useState, useEffect, useRef } from '../vendor/preact-htm.js';
 import { fmtDate, fmtShort, day } from './dates.js';
 import { euro } from './engine.js';
+import { PostBox } from './screens/reperes.js';
 
 export { html };
 
@@ -61,8 +62,67 @@ export function Field({ label, children, hint }) {
 export const PrivacyHint = () => html`<div class="privacy"><${Icon} name="shield" size=${14} /> Pas de nom d’enfant ni d’info de santé ici</div>`;
 
 export function Input({ value, onChange, type = 'text', placeholder, ...rest }) {
+  if (type === 'date') return html`<${DateText} value=${value} onChange=${onChange} />`;
+  if (type === 'time') return html`<${TimeText} value=${value} onChange=${onChange} />`;
+  if (type === 'datetime-local') return html`<${DateTimeText} value=${value} onChange=${onChange} />`;
   return html`<input class="input" type=${type} value=${value ?? ''} placeholder=${placeholder}
     onInput=${(e) => onChange(e.target.value)} ...${rest} />`;
+}
+
+// ---------------------------------------------------------------- Dates au format français (16/11/2026)
+
+const pad2 = (n) => String(n).padStart(2, '0');
+export const toFrDate = (iso) => (iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
+export function parseFrDate(txt) {
+  const t = String(txt || '').trim();
+  if (!t) return '';
+  let d; let m; let y;
+  const parts = t.split(/[^0-9]+/).filter(Boolean);
+  if (parts.length >= 3) [d, m, y] = parts;
+  else if (/^\d{6}$|^\d{8}$/.test(t)) { d = t.slice(0, 2); m = t.slice(2, 4); y = t.slice(4); }
+  else return null;
+  y = Number(y); if (y < 100) y += 2000;
+  d = Number(d); m = Number(m);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (!y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+  return `${y}-${pad2(m)}-${pad2(d)}`;
+}
+export function parseTime(txt) {
+  const t = String(txt || '').trim().toLowerCase();
+  if (!t) return '';
+  const m = t.match(/^(\d{1,2})\s*(?:[:h.]\s*(\d{1,2})?)?$/) || t.match(/^(\d{2})(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]); const mi = Number(m[2] || 0);
+  return h < 24 && mi < 60 ? `${pad2(h)}:${pad2(mi)}` : null;
+}
+
+function DateText({ value, onChange }) {
+  const iso = value ? String(value).slice(0, 10) : '';
+  const [txt, setTxt] = useState(toFrDate(iso));
+  useEffect(() => setTxt(toFrDate(iso)), [iso]);
+  const commit = () => { const v = parseFrDate(txt); if (v === null) setTxt(toFrDate(iso)); else if (v !== iso) onChange(v); };
+  return html`<div class="datefield">
+    <input class="input" inputmode="numeric" placeholder="jj/mm/aaaa" value=${txt} onInput=${(e) => setTxt(e.target.value)} onBlur=${commit}
+      onKeyDown=${(e) => e.key === 'Enter' && e.target.blur()} aria-label="Date (jj/mm/aaaa)" />
+    <span class="datepick" aria-label="Choisir dans le calendrier"><${Icon} name="calendar" size=${20} />
+      <input type="date" lang="fr" tabindex="-1" value=${iso} onChange=${(e) => onChange(e.target.value)} aria-label="Calendrier" /></span>
+  </div>`;
+}
+
+function TimeText({ value, onChange }) {
+  const [txt, setTxt] = useState(value || '');
+  useEffect(() => setTxt(value || ''), [value]);
+  const commit = () => { const v = parseTime(txt); if (v === null) setTxt(value || ''); else { setTxt(v); if (v !== (value || '')) onChange(v); } };
+  return html`<input class="input" inputmode="numeric" placeholder="hh:mm" value=${txt} onInput=${(e) => setTxt(e.target.value)} onBlur=${commit}
+    onKeyDown=${(e) => e.key === 'Enter' && e.target.blur()} aria-label="Heure (hh:mm)" />`;
+}
+
+function DateTimeText({ value, onChange }) {
+  const d = value ? String(value).slice(0, 10) : '';
+  const t = value && String(value).length > 10 ? String(value).slice(11, 16) : '';
+  const emit = (nd, nt) => onChange(nd ? (nt ? `${nd}T${nt}` : nd) : '');
+  return html`<div class="row" style="gap:8px"><div class="grow"><${DateText} value=${d} onChange=${(v) => emit(v, t)} /></div>
+    <div style="width:96px"><${TimeText} value=${t} onChange=${(v) => emit(d, v)} /></div></div>`;
 }
 
 export function Text({ value, onChange, placeholder, privacy = true }) {
@@ -109,7 +169,7 @@ export function Toast({ msg }) { return msg ? html`<div class="toast" role="stat
 
 // ---------------------------------------------------------------- Ligne de tâche
 
-export function TaskRow({ t, today, act, showClient = true, showDate = true }) {
+export function TaskRow({ t, today, act, showClient = true, showDate = true, day: ficheDay = null }) {
   const [open, setOpen] = useState(false);
   const color = t.client?.color || (t.mine ? 'var(--blue)' : 'transparent');
   const items = t.items || [];
@@ -118,16 +178,16 @@ export function TaskRow({ t, today, act, showClient = true, showDate = true }) {
   const dateChip = () => {
     if (!showDate) return null;
     if (t.late) return html`<span class="chip peach">En retard · prévu le ${fmtShort(t.plan)}${t.due && t.due > t.plan ? `, à finir le ${fmtShort(t.due)}` : ''}</span>`;
-    if (t.due && t.due !== t.date && t.plan !== t.date) return html`<span class="chip">À finir le ${fmtShort(t.due)}</span>`;
-    if (t.due && t.due !== t.date) return html`<span class="chip">${fmtShort(t.date)} → ${fmtShort(t.due)}</span>`;
-    if (t.date !== today) return html`<span class="chip">${fmtDate(t.date)}</span>`;
+    const ref = ficheDay || today;
+    if (t.due && t.due !== ref && t.due !== t.date) return html`<span class="chip">À finir le ${fmtShort(t.due)}</span>`;
+    if (t.date !== ref && !ficheDay) return html`<span class="chip">${fmtDate(t.date)}</span>`;
     return null;
   };
   return html`<div class=${`task ${t.late ? 'late' : ''} ${t.done ? 'done' : ''}`} style=${`--c:${color}`} onClick=${() => setOpen(!open)}>
     ${t.question ? html`<span class="check ${t.done ? 'on' : 'dis'}" aria-hidden="true"><${Icon} name="check" size=${18} stroke=${3} /></span>`
       : html`<${Check} on=${t.done} disabled=${!canToggle && !t.done} onClick=${() => act.toggle(t)} label=${t.title} />`}
     <div class="t-body">
-      ${showClient && (t.client || t.mine) ? html`<div class="t-client"><span class="dot" style=${`background:${color}`}></span>${t.client ? t.client.name : 'Mon entreprise'}${t.client?.test ? html` <span class="chip">Test</span>` : null}</div>` : null}
+      ${showClient && t.client ? html`<div class="t-client"><span class="dot" style=${`background:${color}`}></span>${t.client.name}${t.client.test ? html` <span class="chip">Test</span>` : null}</div>` : null}
       <div class="t-title">${t.title}</div>
       <div class="t-meta">
         ${dateChip()}
@@ -135,20 +195,22 @@ export function TaskRow({ t, today, act, showClient = true, showDate = true }) {
         ${items.length ? html`<span class="chip">${t.itemsDone}/${items.length}</span>` : null}
         ${t.ongoing ? html`<span class="chip sage">En cours</span>` : null}
         ${t.blocked && !t.done ? html`<span class="chip rose"><${Icon} name="lock" size=${13} /> Bloqué</span>` : null}
-        ${t.done && t.doneAt ? html`<span class="chip sage">Fait le ${fmtShort(day(t.doneAt))}</span>` : null}
+        ${t.done && t.doneAt && day(t.doneAt) !== (ficheDay || today) ? html`<span class="chip sage">Fait le ${fmtShort(day(t.doneAt))}</span>` : null}
         ${t.snoozedUntil && !t.done ? html`<span class="chip blue">Reporté (prévu le ${fmtShort(t.plannedDate)})</span>` : null}
+        ${t.todo ? html`<span class="chip rose">À faire une seule fois</span>` : null}
+        ${t.launch ? html`<span class="chip sage">Mon lancement · étape ${t.launchPos}/${t.launchTotal}</span>` : null}
       </div>
       ${t.prosp && act.setMails ? html`<div class="row wrap" style="margin-top:12px" onClick=${(e) => e.stopPropagation()}>
         <span class="counter"><button class="btn small" onClick=${() => act.setMails(t, t.sent - 1)} aria-label="Un mail de moins">−</button>
           <b>${t.sent}/${t.target}</b>
           <button class="btn small" onClick=${() => act.setMails(t, t.sent + 1)} aria-label="Un mail de plus">+</button></span>
-        ${!t.done ? html`<button class="btn small primary" onClick=${() => act.setMails(t, t.target)}><${Icon} name="check" size=${16} stroke=${2.6} /> Fait</button>` : null}
         ${t.link ? html`<a class="btn small ghost" href=${t.link} target="_blank" rel="noopener"><${Icon} name="link" size=${15} /> Ma prospection</a>` : null}
       </div>` : null}
+      ${t.recurringId === 'routine-post' && act.S ? html`<${PostBox} S=${act.S} act=${act} t=${t} />` : null}
+      ${t.openTab && act.openTab ? html`<div class="row" style="margin-top:10px" onClick=${(e) => e.stopPropagation()}><button class="btn small" onClick=${() => act.openTab(t.openTab)}><${Icon} name="cards" size=${15} /> Ouvrir mes réponses</button></div>` : null}
       ${t.link && !t.prosp ? html`<div class="row" style="margin-top:10px" onClick=${(e) => e.stopPropagation()}><a class="btn small" href=${t.link} target="_blank" rel="noopener"><${Icon} name="link" size=${15} /> Ouvrir</a></div>` : null}
-      ${!t.done && !t.question && !t.prosp && act.snooze ? html`<div class="row" style="margin-top:12px" onClick=${(e) => e.stopPropagation()}>
-        <button class="btn small primary" disabled=${!canToggle} onClick=${() => act.toggle(t)}><${Icon} name="check" size=${16} stroke=${2.6} /> Fait</button>
-        ${t.daily || t.kind === 'event' || t.date > today ? null : html`<button class="btn small" onClick=${() => act.snooze(t)}>Demain</button>`}
+      ${!t.done && !t.question && !t.prosp && !t.todo && !t.launch && t.recurringId !== 'routine-post' && act.snooze && !(t.daily || t.kind === 'event' || t.date > today) ? html`<div class="row" style="margin-top:12px" onClick=${(e) => e.stopPropagation()}>
+        <button class="btn small" onClick=${() => act.snooze(t)}>Demain</button>
       </div>` : null}
       ${t.question && !st.answer ? html`<div class="row wrap" style="margin-top:12px" onClick=${(e) => e.stopPropagation()}>
         <button class="btn small primary" onClick=${() => act.answer(t, 'oui')}>Oui, reçues</button>
@@ -161,7 +223,7 @@ export function TaskRow({ t, today, act, showClient = true, showDate = true }) {
         ${items.map((i) => html`<div class="item"><${Check} on=${!!st.items?.[i.id]} onClick=${() => act.toggleItem(t, i.id)} label=${i.label} /><span>${i.label}</span></div>`)}
         ${t.note?.length ? html`<ul>${t.note.map((l) => html`<li>${l}</li>`)}</ul>` : null}
         ${t.notes ? html`<p class="small" style="margin-top:6px;white-space:pre-wrap">${t.notes}</p>` : null}
-        ${t.kind === 'invoice' ? html`<div class="small muted" style="margin-top:10px">${t.autoDone ? 'Facture marquée envoyée. Pour la suite : onglet « Mon argent ».' : '« Fait » la marque comme envoyée.'}</div>` : null}
+        ${t.kind === 'invoice' ? html`<div class="small muted" style="margin-top:10px">${t.autoDone ? 'Facture marquée envoyée. Pour la suite : onglet « Mon argent ».' : 'Cocher la case la marque comme envoyée.'}</div>` : null}
         <div class="row wrap" style="margin-top:10px">
           ${t.clientId ? html`<button class="btn small ghost" onClick=${() => act.openClient(t.clientId)}>Voir la fiche</button>` : null}
           ${t.manual ? html`<button class="btn small ghost" onClick=${() => act.editManual(t.manualId)}>Modifier</button>` : null}
@@ -169,6 +231,27 @@ export function TaskRow({ t, today, act, showClient = true, showDate = true }) {
         </div>
       </div>` : null}
     </div></div>`;
+}
+
+// « Ma routine prospection » : la routine du jour regroupée dans une seule carte, avec des petites cases
+export function RoutineCard({ items, act }) {
+  const done = items.filter((t) => t.done).length;
+  const prosp = items.find((t) => t.prosp);
+  return html`<div class="task" style="--c:var(--sage);display:block">
+    <div class="spread"><div class="t-title">Ma routine prospection</div><span class="chip ${done === items.length ? 'sage' : ''}">${done}/${items.length}</span></div>
+    ${prosp ? html`<div class="small muted" style="margin-top:2px">Cette semaine : ${prosp.weekSent} / ${prosp.weekGoal} mails</div>` : null}
+    ${items.map((t) => html`<div class="item" key=${t.key} style="align-items:flex-start">
+      <${Check} on=${t.done} onClick=${() => act.toggle(t)} label=${t.short || t.title} />
+      <div class="grow">
+        <div style=${t.done ? 'text-decoration:line-through;color:var(--ink-3)' : ''}>${t.short || t.title}</div>
+        ${t.prosp ? html`<div class="row" style="margin-top:6px"><span class="counter">
+            <button class="btn small" onClick=${() => act.setMails(t, t.sent - 1)} aria-label="Un mail de moins">−</button>
+            <b>${t.sent}/${t.target}</b>
+            <button class="btn small" onClick=${() => act.setMails(t, t.sent + 1)} aria-label="Un mail de plus">+</button></span></div>` : null}
+        ${t.link ? html`<a class="small" href=${t.link} target="_blank" rel="noopener" style="display:inline-flex;gap:4px;align-items:center;margin-top:4px"><${Icon} name="link" size=${13} /> Ma prospection</a>` : null}
+      </div>
+    </div>`)}
+  </div>`;
 }
 
 export { euro, fmtDate, fmtShort };

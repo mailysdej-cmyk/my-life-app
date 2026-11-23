@@ -75,9 +75,9 @@ test('Prospection : 5 par jour, ce qui manque est reporté dans la semaine', () 
   s.taskState['pm:2026-11-03'] = { sent: 5 };   // mardi : 5 sur 7
   const all = computeAll(s, '2026-11-04');      // mercredi
   const wed = find(all, 'pm:2026-11-04');
-  assert.equal(wed.title, 'Prospection : 7 mails', '5 + les 2 qui manquent');
+  assert.equal(wed.title, 'Envoyer 7 nouveaux mails de prospection', '5 + les 2 qui manquent');
   assert.equal(wed.link, 'https://example.org/bibliotheque');
-  assert.equal(find(all, 'pm:2026-11-05').title, 'Prospection : 5 mails');
+  assert.equal(find(all, 'pm:2026-11-05').title, 'Envoyer 5 nouveaux mails de prospection');
   assert.ok(!ficheView(all, '2026-11-04', '2026-11-04').late.some((t) => t.prosp), 'pas de doublon en retard');
   assert.equal(weekMails(all.ctx, '2026-11-04').missing, 17);
 });
@@ -87,7 +87,7 @@ test('Prospection en un bloc : 25 le jour choisi, puis reporté au lendemain', (
   s.settings.prospection = { enabled: true, goal: 25, mode: 'bloc', blocDay: 1 };
   s.taskState['pm:2026-11-02'] = { sent: 10 };
   const all = computeAll(s, '2026-11-03');
-  assert.equal(find(all, 'pm:2026-11-03').title, 'Prospection : 15 mails');
+  assert.equal(find(all, 'pm:2026-11-03').title, 'Envoyer 15 nouveaux mails de prospection');
   assert.equal(find(all, 'pm:2026-11-04'), undefined, 'rien de prévu les autres jours');
   const done = computeAll(s, '2026-11-02');
   assert.equal(find(done, 'pm:2026-11-02').done, false);
@@ -105,7 +105,7 @@ test('Notifications : 8 h résumé de la fiche, vendredi 12 h mails manquants', 
   s.taskState['pm:2026-11-05'] = { sent: 2 };
   const morning = buildNotification(s, '2026-11-06', 'summary');
   assert.match(morning.body, /^Étape en cours|^Ma fiche du jour : 2 tâches/);
-  assert.match(morning.body, /• Prospection : 8 mails/);
+  assert.match(morning.body, /• Envoyer 8 nouveaux mails de prospection/);
   assert.match(morning.body, /• Faire le résumé de ma semaine/);
   const noon = buildNotification(s, '2026-11-06', 'reminder', { weekCheck: true });
   assert.match(noon.body, /Prospection : il manque 8 mails pour arriver à 25 cette semaine\./);
@@ -124,10 +124,13 @@ test('Mise à jour des données v2 → v3 : sauvegarde, puis tâches de départ,
   const w = migrate(items, '2026-11-04');
   assert.equal(w[0].kind, 'backup');
   assert.ok(!w.some((x) => x.kind === 'prospect'), 'les prospects ne bougent pas');
-  const rec = w.filter((x) => x.kind === 'recurring').map((x) => x.id).sort();
-  assert.deepEqual(rec, ['liste-claude', 'validation-newsletter'], 'ma version modifiée est gardée');
+  const rec = w.filter((x) => x.kind === 'recurring' && !x.data.routine).map((x) => x.id).sort();
+  assert.deepEqual(rec, ['liste-claude', 'resume-semaine', 'validation-newsletter']);
+  const resume = w.find((x) => x.kind === 'recurring' && x.id === 'resume-semaine').data;
+  assert.equal(resume.title, 'Mon résumé à moi', 'ma version modifiée est gardée');
+  assert.equal(resume.disabled, true, 'mise en pause : remplacée par le point du vendredi');
   const st = w.find((x) => x.kind === 'settings').data;
-  assert.equal(st.dataVersion, 3);
+  assert.equal(st.dataVersion, 4);
   assert.equal(st.libraryUrl, 'https://example.org');
   assert.deepEqual(st.prospection, { enabled: true, goal: 25, mode: 'quotidien', blocDay: 1 });
 });

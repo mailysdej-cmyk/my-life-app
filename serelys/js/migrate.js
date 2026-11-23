@@ -2,7 +2,7 @@
 // Avant chaque mise à jour, une copie complète des données est enregistrée (kind « backup »).
 import { DEFAULT_CONFIG } from './catalog.js';
 
-export const DATA_VERSION = 3;
+export const DATA_VERSION = 4;
 const SKIP = new Set(['push', 'system', 'backup']);
 
 // items = { kind: { id: data } }. Renvoie la liste des écritures à faire, dans l'ordre.
@@ -17,8 +17,9 @@ export function migrate(items, today) {
 
   if (version < 2) migrateV2(items, settings, today, writes);
   if (version < 3) migrateV3(items, writes);
+  if (version < 4) migrateV4(items, writes);
   writes.push({ kind: 'settings', id: 'main', data: { ...settings, trackingStart: settings.trackingStart || today, launchSeeded: true,
-    prospection: settings.prospection || { enabled: true, goal: 25, mode: 'quotidien', blocDay: 1 }, dataVersion: DATA_VERSION } });
+    prospection: settings.prospection || { enabled: true, goal: 25, mode: 'quotidien', blocDay: 1 }, siteOnline: !!settings.siteOnline, dataVersion: DATA_VERSION } });
   return writes;
 }
 
@@ -48,5 +49,33 @@ export const STARTER_RECURRING = [
 function migrateV3(items, writes) {
   for (const r of STARTER_RECURRING) {
     if (!items.recurring?.[r.id]) writes.push({ kind: 'recurring', id: r.id, data: { ...r, id: undefined, createdAt: new Date().toISOString() } });
+  }
+}
+
+// v4 : routine « visibilité et prospection ». Les réseaux sociaux attendent « Site en ligne : oui »,
+// les mails et les relances attendent « Entreprise créée : oui ». Tout reste modifiable ensuite.
+const WEEK = [1, 2, 3, 4, 5];
+export const ROUTINE = [
+  { id: 'routine-relances', title: 'Faire les relances de prospection', short: 'Faire les relances (contactées il y a 7 jours, sans réponse)', note: 'Les crèches contactées il y a 7 jours sans réponse.', freq: { type: 'weekdays', weekdays: WEEK }, gate: 'entreprise', link: 'prospection', group: 'routine', order: 2 },
+  { id: 'routine-linkedin-ajouts', title: 'Ajouter 2 à 4 directrices ou gestionnaires d’établissements petite enfance sur LinkedIn', short: 'LinkedIn : ajouter 2 à 4 directrices ou gestionnaires', freq: { type: 'weekdays', weekdays: WEEK }, gate: 'site', group: 'routine', order: 3 },
+  { id: 'routine-instagram-suivre', title: 'Suivre 2 ou 3 comptes de crèches ou de pros de la petite enfance sur Instagram (optionnel)', short: 'Instagram : suivre 2 ou 3 comptes', freq: { type: 'weekdays', weekdays: WEEK }, gate: 'site', instagram: true, group: 'routine', order: 4 },
+  { id: 'routine-facebook', title: 'Passer 10 à 15 min dans les groupes Facebook petite enfance', note: 'Répondre aux questions, rendre service, ne pas vendre.', freq: { type: 'weekdays', weekdays: [1, 4] }, gate: 'site', order: 5 },
+  { id: 'routine-post', title: 'Publier le post de la semaine sur LinkedIn', note: 'Et le même sur Instagram si je veux.', freq: { type: 'weekdays', weekdays: [2] }, gate: 'site', order: 5 },
+  { id: 'routine-commentaires', title: 'Écrire 2 ou 3 commentaires utiles sous des posts LinkedIn', freq: { type: 'weekdays', weekdays: [3] }, gate: 'site', order: 5 },
+  { id: 'routine-point', title: 'Faire le point de la semaine', note: 'Mettre à jour « Ma prospection » dans ma Bibliothèque Serelys, puis demander à Claude la liste de crèches suivante.', freq: { type: 'weekdays', weekdays: [5] }, gate: 'entreprise', link: 'prospection', order: 9 },
+  { id: 'une-fois-linkedin', title: 'Créer mon profil LinkedIn', note: 'Photo, titre « J’aide les établissements petite enfance à gagner du temps sur l’administratif », section Infos avec mon histoire courte et le lien du site.', freq: { type: 'todo' }, gate: 'site', order: 1 },
+  { id: 'une-fois-google', title: 'Créer ma fiche Google Business Profile', note: 'Service à distance, sans adresse visible.', freq: { type: 'todo' }, gate: 'site', order: 2 },
+  { id: 'une-fois-facebook', title: 'Rejoindre 3 à 5 groupes Facebook petite enfance', freq: { type: 'todo' }, gate: 'site', order: 3 },
+  { id: 'une-fois-instagram', title: 'Créer le compte Instagram Serelys', note: 'Nom « Serelys », logo, lien du site.', freq: { type: 'todo' }, gate: 'site', instagram: true, order: 4 },
+];
+// Remplacées par « Faire le point de la semaine » : mises en pause (gardées, plus affichées)
+export const PAUSED_BY_ROUTINE = ['liste-claude', 'resume-semaine'];
+function migrateV4(items, writes) {
+  for (const r of ROUTINE) {
+    if (!items.recurring?.[r.id]) writes.push({ kind: 'recurring', id: r.id, data: { ...r, id: undefined, scope: 'me', routine: true, createdAt: new Date().toISOString() } });
+  }
+  for (const id of PAUSED_BY_ROUTINE) {
+    const r = items.recurring?.[id];
+    if (r && !r.disabled) writes.push({ kind: 'recurring', id, data: { ...r, disabled: true } });
   }
 }

@@ -3,20 +3,18 @@ import { Icon, Sheet, Field, Input, Switch } from '../ui.js';
 
 // Les cartes elles-mêmes sont uniquement dans ma base (jamais dans le code).
 
+// Une carte : la question est toujours visible ; la réponse reste cachée jusqu'à « Voir la réponse ».
 function FlipCard({ c, onEdit, flipped, onFlip }) {
-  return html`<div class=${`flip ${flipped ? 'on' : ''}`} onClick=${onFlip}>
-    <div class="flip-in">
-      <div class="face">
-        <div class="spread" style="align-items:flex-start"><div class="q grow">${c.star ? html`<span class="star">★ </span>` : null}${c.q}</div>
-          ${onEdit ? html`<button class="icon-btn" style="width:38px;height:38px" onClick=${(e) => { e.stopPropagation(); onEdit(); }} aria-label="Modifier"><${Icon} name="edit" size=${17} /></button>` : null}</div>
-        <div class="small muted" style="margin-top:14px;display:flex;gap:6px;align-items:center"><${Icon} name="flip" size=${14} /> Touche pour retourner</div>
-      </div>
-      <div class="face back">
-        <div class="lab">Ma réponse</div><div class="a">${c.a}</div>
-        ${c.insist ? html`<div class="lab">Si elle insiste</div><div>${c.insist}</div>` : null}
-        ${c.tip ? html`<div class="lab">Conseil</div><div class="muted" style="font-weight:700">${c.tip}</div>` : null}
-      </div>
-    </div></div>`;
+  return html`<div class="card qa">
+    <div class="spread" style="align-items:flex-start"><div class="q grow">${c.star ? html`<span class="star">★ </span>` : null}${c.q}</div>
+      ${onEdit ? html`<button class="icon-btn" style="width:38px;height:38px" onClick=${onEdit} aria-label="Modifier"><${Icon} name="edit" size=${17} /></button>` : null}</div>
+    ${flipped ? html`<div class="answer">
+      <div class="lab">Ma réponse</div><div class="a">${c.a}</div>
+      ${c.insist ? html`<div class="lab">Si elle insiste</div><div>${c.insist}</div>` : null}
+      ${c.tip ? html`<div class="lab">Conseil</div><div class="muted" style="font-weight:700">${c.tip}</div>` : null}
+    </div>` : null}
+    <button class="btn small" style="margin-top:14px" onClick=${onFlip} aria-expanded=${!!flipped}><${Icon} name="flip" size=${15} /> ${flipped ? 'Masquer la réponse' : 'Voir la réponse'}</button>
+  </div>`;
 }
 
 export function CardsScreen({ S, act, openSettings }) {
@@ -36,10 +34,10 @@ export function CardsScreen({ S, act, openSettings }) {
     return html`<div class="screen">
       <div class="topbar"><button class="icon-btn" onClick=${() => setTrain(null)} aria-label="Quitter"><${Icon} name="back" /></button><h1 class="grow" style="font-size:22px">Entraînement</h1><span class="chip">${train.i + 1}/${train.list.length}</span></div>
       ${c ? html`
-        <p class="muted" style="margin:0 6px 14px;font-weight:700">${train.flipped ? 'Compare avec ta réponse.' : 'Dis ta réponse à voix haute, puis retourne la carte.'}</p>
+        <p class="muted" style="margin:0 6px 14px;font-weight:700">${train.flipped ? 'Compare avec ta réponse.' : 'Dis ta réponse à voix haute, puis touche « Voir la réponse ».'}</p>
         <${FlipCard} c=${c} flipped=${train.flipped} onFlip=${() => setTrain({ ...train, flipped: !train.flipped })} />
         ${train.flipped ? html`<button class="btn primary block" onClick=${() => setTrain({ ...train, i: train.i + 1, flipped: false })}>Carte suivante</button>`
-          : html`<button class="btn blue block" onClick=${() => setTrain({ ...train, flipped: true })}>Retourner la carte</button>`}`
+          : html`<button class="btn blue block" onClick=${() => setTrain({ ...train, flipped: true })}>Voir la réponse</button>`}`
       : html`<div class="card center"><h2 style="justify-content:center">Bravo, tu as fait toutes les cartes !</h2><button class="btn primary" onClick=${startTrain}>Recommencer</button></div>`}
     </div>`;
   }

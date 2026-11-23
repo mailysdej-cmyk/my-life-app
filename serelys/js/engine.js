@@ -45,6 +45,8 @@ export function makeContext(state, today) {
     config, settings, today, clients, launch, realActive,
     mode: realActive.length ? 'clientes' : 'lancement',
     entrepriseCreated: !!settings.aeCreated || launch.some((x) => x.id === 'entreprise' && x.done),
+    siteOnline: !!settings.siteOnline,
+    instagram: !!settings.instagram,
     byId: Object.fromEntries(clients.map((c) => [c.id, c])),
     taskState: state.taskState || {},
     invoiceState: state.invoiceState || {},
@@ -481,9 +483,12 @@ function myTasks(ctx, invoices, fromYm, toYm) {
   if (settings.rcProDate) add({ key: 'e:rcpro', date: day(settings.rcProDate), title: 'Souscrire mon assurance RC pro', note: ['Avant la première signature.'] });
   if (settings.aeTaskDate) add({ key: 'e:creation-ae', date: day(settings.aeTaskDate), title: 'Créer mon auto-entreprise', note: ['Pas de devis ni de facture sans SIRET.'], autoDone: !!settings.aeCreated });
   if (aeStart && !settings.acreDone) {
-    for (const j of [7, 30, 50]) {
-      add({ key: `e:acre:${j}`, stateKey: 'e:acre', date: addDays(aeStart, j), due: addDays(aeStart, 60), reminder: j > 7, legal: true,
-        title: 'Demander l’ACRE à l’Urssaf', note: [`Au plus tard le ${fmtDate(addDays(aeStart, 60))}.`] });
+    const limit = addDays(aeStart, 60);
+    const left = diffDays(ctx.today, limit);
+    for (const j of [7, 30, 50, 58]) {
+      add({ key: `e:acre:${j}`, stateKey: 'e:acre', date: addDays(aeStart, j), due: limit, reminder: j > 7, legal: true, link: 'https://www.autoentrepreneur.urssaf.fr',
+        title: 'Demander l’ACRE sur autoentrepreneur.urssaf.fr',
+        note: [left >= 0 ? `Il reste ${left} jour${left > 1 ? 's' : ''} (jusqu’au ${fmtDate(limit)}). Passé 60 jours, l’ACRE est perdue.` : `Le délai de 60 jours est passé depuis le ${fmtDate(limit)}.`] });
     }
   }
   if (settings.eInvoiceDate) add({ key: 'e:facture-electronique', date: day(settings.eInvoiceDate), title: 'Préparer la facture électronique', note: ['Obligatoire pour émettre des factures à partir du 1er septembre 2027.'], legal: true });
@@ -553,6 +558,8 @@ export function recurringDates(freq = {}, from, to) {
   } else if (freq.type === 'interval' && isDate(freq.start)) {
     const step = Math.max(1, Number(freq.every) || 1) * (freq.unit === 'weeks' ? 7 : 1);
     for (let d = day(freq.start); d <= to; d = addDays(d, step)) if (d >= from) out.push({ date: d });
+  } else if (freq.type === 'todo') {
+    out.push({ date: null });
   } else if (freq.type === 'once' && isDate(freq.date) && inRange(day(freq.date))) {
     out.push({ date: day(freq.date) });
   }
@@ -567,6 +574,7 @@ export function describeFreq(freq = {}) {
     case 'monthly': return freq.rangeFrom ? `Chaque mois, du ${days([freq.rangeFrom])} au ${days([freq.rangeTo || freq.rangeFrom])}` : `Chaque mois, le ${days(freq.monthDays || [])}`;
     case 'interval': return `Tous les ${Number(freq.every) > 1 ? `${freq.every} ` : ''}${freq.unit === 'weeks' ? 'semaines' : 'jours'}${isDate(freq.start) ? ` (à partir du ${fmtShort(freq.start)})` : ''}`;
     case 'once': return isDate(freq.date) ? `Une fois, le ${fmtDate(freq.date)}` : 'Une fois';
+    case 'todo': return 'Une fois, à cocher (disparaît ensuite)';
     default: return '';
   }
 }
@@ -575,6 +583,12 @@ function recurringTasks(ctx, fromYm, toYm) {
   const out = [];
   const from = firstOf(fromYm); const to = lastOf(toYm);
   for (const r of ctx.recurring) {
+    if (!gateOpen(r.gate, ctx) || (r.instagram && !ctx.instagram)) continue;
+    if (r.freq?.type === 'todo') {
+      if (r.scope !== 'clients') out.push(makeTask({ key: `r:${r.id}`, mine: true, custom: true, todo: true, noCarry: true, hideDone: true, date: ctx.today,
+        title: r.title, note: r.note ? [r.note] : null, link: r.link || null, recurringId: r.id, routine: !!r.routine, order: r.order ?? 99 }));
+      continue;
+    }
     // Une tâche récurrente commence le jour où je la crée : pas de « retard » sur les semaines d'avant
     const since = isDate(r.createdAt) ? maxD(from, day(r.createdAt)) : from;
     const occ = recurringDates(r.freq, since, to).filter((o) => (o.due || o.date) >= since);
@@ -593,11 +607,23 @@ function recurringTasks(ctx, fromYm, toYm) {
       }
     } else {
       if (r.clientsOnly && ctx.mode !== 'clientes') continue;
-      for (const o of occ) out.push(makeTask({ key: `r:${r.id}:${o.date}`, mine: true, custom: true, date: o.date, due: o.due || null, title: r.title, note, link: r.link || null, recurringId: r.id }));
+      // Routine du jour (carte « Ma routine prospection ») : ce qui n'est pas fait ne s'accumule pas en retard
+      for (const o of occ) out.push(makeTask({ key: `r:${r.id}:${o.date}`, mine: true, custom: true, date: o.date, due: o.due || null, title: r.title, note,
+        link: (r.link === 'prospection' ? prospectionUrl(ctx) : r.link) || null, recurringId: r.id, routine: !!r.routine, order: r.order ?? 99,
+        group: r.group || null, short: r.short || null, noCarry: r.group === 'routine' }));
     }
   }
   return out;
 }
+
+// Une tâche peut attendre une étape : 'site' (site en ligne) ou 'entreprise' (entreprise créée).
+export const GATES = { site: 'Quand mon site est en ligne', entreprise: 'Quand mon entreprise est créée' };
+export function gateOpen(gate, ctx) {
+  if (gate === 'site') return ctx.siteOnline;
+  if (gate === 'entreprise') return ctx.entrepriseCreated;
+  return true;
+}
+const prospectionUrl = (ctx) => prospectionSettings(ctx.settings).url || ctx.settings.libraryUrl || null;
 
 // ---------------------------------------------------------------- Prospection : X mails par semaine
 
@@ -617,17 +643,19 @@ export function weekMails(ctx, d) {
   let sent = 0;
   for (let i = 0; i < 7; i++) sent += Number(ctx.taskState[`pm:${addDays(mon, i)}`]?.sent) || 0;
   const ps = prospectionSettings(ctx.settings);
-  return { sent, goal: Number(ps.goal) || 0, missing: Math.max(0, (Number(ps.goal) || 0) - sent), enabled: ps.enabled };
+  return { sent, goal: Number(ps.goal) || 0, missing: Math.max(0, (Number(ps.goal) || 0) - sent), enabled: ps.enabled && ctx.entrepriseCreated };
 }
 
 function prospectionTasks(ctx, weeks = 4) {
   const ps = prospectionSettings(ctx.settings);
-  if (!ps.enabled) return [];
+  if (!ps.enabled || !ctx.entrepriseCreated) return [];
   const out = [];
   const planned = plannedMails(ps);
   for (let w = 0; w < weeks; w++) {
     const mon = addDays(mondayOf(ctx.today), 7 * w);
     let cumPlanned = 0; let sentBefore = 0;
+    let sentWeek = 0;
+    for (let i = 0; i < 7; i++) sentWeek += Number(ctx.taskState[`pm:${addDays(mon, i)}`]?.sent) || 0;
     for (let i = 0; i < 5; i++) {
       const d = addDays(mon, i);
       cumPlanned += planned[i];
@@ -636,12 +664,34 @@ function prospectionTasks(ctx, weeks = 4) {
       const target = d === ctx.today ? Math.max(0, cumPlanned - sentBefore) : planned[i];
       sentBefore += sent;
       if (target <= 0 && sent <= 0) continue;
-      out.push(makeTask({ key: `pm:${d}`, kind: 'prosp', prosp: true, mine: true, noCarry: true, date: d, target: Math.max(target, sent), sent,
-        title: `Prospection : ${target} mail${target > 1 ? 's' : ''}`, link: ps.url || ctx.settings.libraryUrl || null,
-        note: [ps.mode === 'bloc' ? `Objectif : ${ps.goal} mails cette semaine, en un bloc.` : `Objectif : ${ps.goal} mails cette semaine, ${Math.round(ps.goal / 5)} par jour.`] }));
+      out.push(makeTask({ key: `pm:${d}`, kind: 'prosp', prosp: true, mine: true, noCarry: true, routine: true, group: 'routine', order: 1, date: d, target: Math.max(target, sent), sent,
+        short: `Envoyer ${target} nouveau${target > 1 ? 'x' : ''} mail${target > 1 ? 's' : ''}`,
+        title: `Envoyer ${target} nouveau${target > 1 ? 'x' : ''} mail${target > 1 ? 's' : ''} de prospection`, link: prospectionUrl(ctx),
+        weekSent: sentWeek, weekGoal: Number(ps.goal) || 0, note: [`Cette semaine : ${sentWeek} / ${ps.goal} mails.`] }));
     }
   }
   return out;
+}
+
+// Mon lancement : seulement la prochaine étape sur la fiche du jour (et celle cochée aujourd'hui, barrée)
+function launchTasks(ctx) {
+  const steps = ctx.launch;
+  const cur = currentLaunchStep(steps);
+  const out = [];
+  steps.forEach((x, i) => {
+    const doneToday = x.done && x.doneAt && day(x.doneAt) === ctx.today;
+    if (x !== cur && !doneToday) return;
+    out.push(makeTask({ key: `l:${x.id}`, launchId: x.id, launch: true, mine: true, custom: true, noCarry: true, date: ctx.today, title: x.label,
+      launchPos: i + 1, launchTotal: steps.length }));
+  });
+  return out;
+}
+
+// La veille d'une visio de découverte ou de signature : relire mes réponses par cœur
+function visioEveTasks(tasks) {
+  return tasks.filter((t) => t.kind === 'event' && (/:ob:(visio|signature)$/.test(t.key) || /^p:.*:visio$/.test(t.key))).map((e) => makeTask({
+    key: `rv:${e.key}`, mine: true, custom: true, date: addDays(e.date, -1), openTab: 'cards', expires: e.date,
+    title: 'Relire mes réponses par cœur', note: [`Visio demain${e.time ? ` à ${e.time.replace(':', ' h ')}` : ''} : ${e.title.replace(/^Faire la /, '')}.`] }));
 }
 
 // Toutes les tâches, avec leur état. Options : horizon en mois après aujourd'hui.
@@ -656,7 +706,8 @@ export function computeAll(state, today, { monthsAhead = 3 } = {}) {
     tasks.push(...onboardingTasks(c, ctx), ...monthlyTasks(c, ctx, fromYm, toYm), ...dateLinkedTasks(c, ctx));
   }
   tasks.push(...invoiceTasks(invoices, ctx), ...myTasks(ctx, invoices, fromYm, toYm), ...prospectTasks(ctx),
-    ...recurringTasks(ctx, fromYm, toYm), ...prospectionTasks(ctx));
+    ...recurringTasks(ctx, fromYm, toYm), ...prospectionTasks(ctx), ...launchTasks(ctx));
+  tasks.push(...visioEveTasks(tasks));
   for (const m of ctx.manualTasks) {
     if (!isDate(m.date)) continue;
     tasks.push(makeTask({ key: `m:${m.id}`, manualId: m.id, clientId: m.clientId || null, date: day(m.date), time: timeOf(m.date), title: m.title, manual: true, notes: m.notes }));
@@ -673,6 +724,7 @@ export function computeAll(state, today, { monthsAhead = 3 } = {}) {
     t.doneAt = st.doneAt || null;
     // « Demain » : la tâche est reportée, sans passer en retard
     if (t.prosp) t.done = t.target > 0 && t.sent >= t.target;
+    if (t.launchId) { const x = ctx.launch.find((y) => y.id === t.launchId); t.done = !!x?.done; t.doneAt = x?.doneAt || null; }
     if (!t.done && isDate(st.snoozedUntil) && day(st.snoozedUntil) > t.plan) {
       t.snoozedUntil = day(st.snoozedUntil);
       t.plannedDate = t.plan;
@@ -685,6 +737,8 @@ export function computeAll(state, today, { monthsAhead = 3 } = {}) {
     // Pas cochée le jour prévu → sur la fiche du lendemain, « en retard »
     t.late = !t.done && !t.noCarry && t.plan < today;
     if (t.noCarry && !t.done && t.plan < today) t.hidden = true;
+    if (t.hideDone && t.done && (!t.doneAt || day(t.doneAt) < today)) t.hidden = true;
+    if (t.expires && !t.done && today > t.expires) t.hidden = true; // ex. relire mes réponses : inutile après la visio
     if (t.daily && !t.done && t.date < today) t.hidden = true;
     t.today = !t.done && t.plan === today;
     t.ongoing = false;
@@ -736,8 +790,9 @@ export function ficheView(all, d, today) {
   // Aujourd'hui : aussi ce que j'ai rattrapé (prévu un jour d'avant, coché aujourd'hui)
   const planned = vis.filter((t) => (t.plan === d && !(d === today && t.late))
     || (d === today && t.done && t.plan < d && t.doneAt && day(t.doneAt) === today));
-  const rank = (t) => (t.time ? 1 : t.prosp ? 3 : t.due && t.due === d ? 2 : 4);
-  const sortKey = (t) => `${t.done ? 1 : 0}${rank(t)}${t.time || ''}${t.client?.name || 'zz'}${t.title}`;
+  const rank = (t) => (t.time ? 1 : t.routine ? 4 : t.due && t.due === d ? 2 : 3);
+  const pad2 = (n) => String(n ?? 99).padStart(2, '0');
+  const sortKey = (t) => `${t.done ? 1 : 0}${rank(t)}${t.time || ''}${t.routine ? `${t.todo ? 1 : 0}${pad2(t.order)}` : ''}${t.client?.name || 'zz'}${t.title}`;
   const items = [...planned].sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
   // En retard : d'abord les échéances légales encore tenables, puis du plus ancien au plus récent
   const urgent = (t) => (t.legal && t.due && t.due >= today ? 0 : 1);
@@ -833,8 +888,8 @@ export function buildNotification(state, today, kind, { weekly = false, weekChec
   const todays = fiche.items.filter((t) => !t.done && notifiable(t, ctx));
   const lines = [];
   if (kind === 'summary') {
-    const step = ctx.mode === 'lancement' ? currentLaunchStep(ctx.launch) : null;
-    if (step) lines.push(`Étape en cours : ${step.label}`);
+    const soft = isoWeekday(today) >= 6;
+    if (soft) late.length = 0; // jour souple : rien d'obligatoire, pas de rappel du retard
     const n = todays.length + late.length;
     if (n) lines.push(`Ma fiche du jour : ${plural(n, 'tâche')}${late.length ? `, dont ${late.length} en retard` : ''}`, ...bullets([...late, ...todays]));
     if (weekly) {
@@ -850,6 +905,7 @@ export function buildNotification(state, today, kind, { weekly = false, weekChec
     return { title: `Serelys · ${fmtDate(today)}`, body: lines.join('\n'), tag: `summary-${today}`, count: n };
   }
   if (kind === 'reminder') {
+    if (isoWeekday(today) >= 6) return null; // jour souple
     const rest = [...late, ...todays];
     if (rest.length) lines.push(`Il reste ${plural(rest.length, 'chose')} à cocher :`, ...bullets(rest, 4));
     if (weekCheck) {
