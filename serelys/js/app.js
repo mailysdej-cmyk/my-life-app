@@ -9,7 +9,8 @@ import { ClientsScreen } from './screens/clients.js';
 import { MoneyScreen } from './screens/money.js';
 import { ProspectsScreen } from './screens/prospects.js';
 import { CardsScreen } from './screens/cards.js';
-import { SettingsScreen, WhereIAm } from './screens/settings.js';
+import { SettingsScreen } from './screens/settings.js';
+import { LaunchSummary } from './screens/launch.js';
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const nowISO = () => new Date().toISOString();
@@ -29,6 +30,8 @@ function derive(items) {
     cards: vals('card'),
     launch: vals('launch'),
     recurring: vals('recurring'),
+    posts: vals('post'),
+    reperes: vals('repere'),
     push: vals('push'),
     system: items.system || {},
   };
@@ -109,12 +112,13 @@ function TodayScreen({ S, all, today, act, openSettings, banners }) {
           <span>${DAY_SHORT[i]}</span><b>${Number(d.slice(8))}</b><em>${n || ''}</em></button>`; })}</div>
       ${!week.includes(today) ? html`<button class="btn small ghost block" style="margin-top:8px" onClick=${() => setSel(today)}>Revenir à aujourd’hui</button>` : null}
     </div>
-    ${isToday ? (all.mode === 'lancement' ? html`<${LaunchCard} steps=${all.launch} act=${act} />` : html`<div class="card">
+    ${isToday && currentLaunchStep(all.launch) ? html`<${LaunchSummary} all=${all} act=${act} />` : null}
+    ${isToday && all.mode === 'clientes' ? html`<div class="card">
       <h2><${Icon} name="leaf" size=${20} /> Où j’en suis ce mois-ci</h2>
       <div class="cycle">${cyc.phases.map((p) => html`<div class=${`ph ${cyc.phase === p.id ? 'on' : ''}`}>${p.label}<b>${p.range}</b></div>`)}</div>
       <div class="track" aria-label=${`Jour ${cyc.day} sur ${cyc.last}`}><span style=${`width:${(cyc.day / cyc.last) * 100}%`}></span></div>
       <div class="small muted" style="margin-top:8px">Jour ${cyc.day} sur ${cyc.last}</div>
-    </div>`) : null}
+    </div>` : null}
     ${wm.enabled && sel >= mondayOf(today) && sel <= addDays(mondayOf(today), 6) ? html`<div class="card flat">
       <div class="spread"><h2 style="margin:0"><${Icon} name="prospect" size=${20} /> Prospection</h2><b>${wm.sent}/${wm.goal} mails</b></div>
       <div class="progress"><span style=${`width:${Math.min(100, wm.goal ? (wm.sent / wm.goal) * 100 : 0)}%`}></span></div>
@@ -122,49 +126,20 @@ function TodayScreen({ S, all, today, act, openSettings, banners }) {
       ${prospUrl ? html`<a class="btn small block" style="margin-top:10px" href=${prospUrl} target="_blank" rel="noopener"><${Icon} name="link" size=${16} /> Ouvrir Ma prospection (Bibliothèque)</a>`
         : html`<button class="btn small ghost block" style="margin-top:8px" onClick=${openSettings}>Ajouter le lien de ma Bibliothèque (Réglages › Prospection)</button>`}
     </div>` : null}
+    ${[6, 0].includes(new Date(`${sel}T12:00:00Z`).getUTCDay()) ? html`<div class="banner info"><${Icon} name="leaf" /> Jour souple : pas de fiche obligatoire. Ce qui est listé peut attendre lundi.</div>` : null}
     <div class="section-title"><span>${isToday ? 'Ma fiche du jour' : `Fiche du ${fmtDate(sel)}`}</span>${fiche.total ? html`<span>${fiche.done}/${fiche.total}</span>` : null}</div>
     ${fiche.total ? html`<div class="progress" style="margin:-4px 6px 14px"><span style=${`width:${Math.round((fiche.done / fiche.total) * 100)}%`}></span></div>` : null}
-    ${fiche.late.length ? html`<div class="small" style="margin:0 6px 8px;font-weight:800;color:var(--rose-d)">En retard (pas cochées les jours d’avant)</div>${fiche.late.map(row)}` : null}
+    ${fiche.late.length ? html`<div class="small" style="margin:0 6px 8px;font-weight:800;color:var(--rose-d)">En retard (pas cochées les jours d’avant)</div><div>${fiche.late.map(row)}</div>` : null}
     ${fiche.late.length && fiche.items.length ? html`<div class="small muted" style="margin:14px 6px 8px;font-weight:800">Prévu ${isToday ? 'aujourd’hui' : 'ce jour-là'}</div>` : null}
-    ${fiche.items.filter((t) => !t.routine).map(row)}
+    <div key=${`fiche-${sel}`}>${fiche.items.filter((t) => !t.routine).map(row)}</div>
     ${fiche.items.some((t) => t.routine) ? html`<div class="section-title" style="margin-top:18px"><span>Visibilité et prospection</span>
       <span>${fiche.items.filter((t) => t.routine && t.done).length}/${fiche.items.filter((t) => t.routine).length}</span></div>
-      ${fiche.items.filter((t) => t.routine).map(row)}` : null}
-    ${isToday && all.mode === 'lancement' && !(all.ctx.siteOnline && all.ctx.entrepriseCreated) ? html`<div style="margin-top:14px"><${WhereIAm} all=${all} act=${act} /></div>` : null}
+      <div key=${`routine-${sel}`}>${fiche.items.filter((t) => t.routine).map(row)}</div>` : null}
+
     ${!fiche.total ? html`<div class="empty">${isToday ? 'Rien à faire aujourd’hui. Profites-en !' : 'Rien de prévu ce jour-là.'}</div>` : null}
     ${fiche.total && !fiche.remaining.length && isToday ? html`<div class="empty">Tout est coché. Belle journée !</div>` : null}
     <button class="btn small ghost block" style="margin-top:6px" onClick=${() => act.openRecurring()}>Gérer mes tâches récurrentes</button>
     <button class="fab" onClick=${() => act.editManual(null)} aria-label="Ajouter une tâche"><${Icon} name="plus" size=${28} stroke=${2.6} /></button>
-  </div>`;
-}
-
-// Mode lancement : ma checklist de départ, à cocher, modifier et compléter.
-function LaunchCard({ steps, act }) {
-  const [editing, setEditing] = useState(null);
-  const [label, setLabel] = useState('');
-  const [adding, setAdding] = useState('');
-  const current = currentLaunchStep(steps);
-  const done = steps.filter((x) => x.done).length;
-  const save = async () => { if (label.trim()) await act.saveStep(editing, { label: label.trim() }); setEditing(null); };
-  return html`<div class="card">
-    <h2><${Icon} name="leaf" size=${20} /> Mode lancement</h2>
-    <p class="small muted" style="margin:-4px 0 10px">Tant que je n’ai pas de vraie cliente. Les notifications ne parlent que de l’étape en cours.</p>
-    ${steps.length ? html`<div class="progress" style="margin:0 0 12px"><span style=${`width:${Math.round((done / steps.length) * 100)}%`}></span></div>` : null}
-    ${steps.map((x) => html`<div class="item" key=${x.id} style=${x === current ? 'font-weight:800' : ''}>
-      <${Check} on=${!!x.done} onClick=${() => act.saveStep(x.id, { done: !x.done, doneAt: x.done ? null : new Date().toISOString() })} label=${x.label} />
-      ${editing === x.id
-        ? html`<input class="input grow" value=${label} onInput=${(e) => setLabel(e.target.value)} onKeyDown=${(e) => e.key === 'Enter' && save()} onBlur=${save} autofocus />`
-        : html`<span class="grow" style=${x.done ? 'text-decoration:line-through;color:var(--ink-3)' : ''} onClick=${() => { setEditing(x.id); setLabel(x.label); }}>${x.label}</span>`}
-      ${x === current ? html`<span class="chip sage">En cours</span>` : null}
-      <button class="icon-btn" style="width:34px;height:34px;box-shadow:none" onClick=${() => act.deleteStep(x.id)} aria-label=${`Supprimer « ${x.label} »`}><${Icon} name="close" size=${15} /></button>
-    </div>`)}
-    ${!steps.length || !current ? html`<div class="small muted" style="margin:6px 0">${steps.length ? 'Toutes les étapes sont faites. Bravo !' : 'Aucune étape.'}</div>` : null}
-    <div class="row" style="margin-top:10px">
-      <input class="input grow" placeholder="Ajouter une étape" value=${adding} onInput=${(e) => setAdding(e.target.value)}
-        onKeyDown=${(e) => { if (e.key === 'Enter' && adding.trim()) { act.addStep(adding.trim()); setAdding(''); } }} />
-      <button class="btn small" disabled=${!adding.trim()} onClick=${() => { act.addStep(adding.trim()); setAdding(''); }} aria-label="Ajouter l’étape"><${Icon} name="plus" size=${18} /></button>
-    </div>
-    <p class="small muted" style="margin-top:10px">Touche une étape pour la modifier. L’appli passera toute seule en mode clientes dès ta première vraie cliente.</p>
   </div>`;
 }
 
@@ -224,6 +199,12 @@ function App() {
   const act = {
     store, S, all, today, say, uid,
     async toggle(t) {
+      if (t.launchId) {
+        const done = !t.done;
+        await act.saveStep(t.launchId, { done, doneAt: done ? nowISO() : null });
+        if (done) say('Bravo ! Étape suivante sur ta fiche.');
+        return;
+      }
       if (t.kind === 'invoice') {
         const inv = all.invoices.find((i) => i.key === t.invoiceKey);
         if (inv && inv.status === 'a_envoyer') { await act.setInvoice(inv, 'envoyee'); say('Facture marquée envoyée'); }
@@ -255,6 +236,17 @@ function App() {
         if (status === 'payee') next.paidAt = extra.paidAt || next.paidAt || today; else delete next.paidAt;
       }
       await store.put('invoice', inv.key, next);
+    },
+    openSettings(section) { setSettingsOpen(section || true); },
+    openTab(id) { setTab(id); setSettingsOpen(false); },
+    async copy(text, msg) {
+      try { await navigator.clipboard.writeText(text); say(msg || 'Copié'); } catch { say('Copie impossible : sélectionne le texte à la main.'); }
+    },
+    async publishPost(t) {
+      await act.saveSettings({ postCursor: (S.settings.postCursor || 0) + 1 });
+      const st = S.taskState[t.stateKey] || {};
+      await store.put('task', t.stateKey, { ...st, done: true, doneAt: nowISO(), title: t.title });
+      say('Publié ! Le post suivant sera prêt mardi prochain.');
     },
     async snooze(t) {
       const st = S.taskState[t.stateKey] || {};

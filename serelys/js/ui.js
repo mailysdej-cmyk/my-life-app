@@ -2,6 +2,7 @@
 import { html, useState, useEffect } from '../vendor/preact-htm.js';
 import { fmtDate, fmtShort, day } from './dates.js';
 import { euro } from './engine.js';
+import { PostBox } from './screens/reperes.js';
 
 export { html };
 
@@ -138,6 +139,7 @@ export function TaskRow({ t, today, act, showClient = true, showDate = true }) {
         ${t.done && t.doneAt ? html`<span class="chip sage">Fait le ${fmtShort(day(t.doneAt))}</span>` : null}
         ${t.snoozedUntil && !t.done ? html`<span class="chip blue">Reporté (prévu le ${fmtShort(t.plannedDate)})</span>` : null}
         ${t.todo ? html`<span class="chip rose">À faire une seule fois</span>` : null}
+        ${t.launch ? html`<span class="chip sage">Mon lancement · étape ${t.launchPos}/${t.launchTotal}</span>` : null}
       </div>
       ${t.prosp && act.setMails ? html`<div class="row wrap" style="margin-top:12px" onClick=${(e) => e.stopPropagation()}>
         <span class="counter"><button class="btn small" onClick=${() => act.setMails(t, t.sent - 1)} aria-label="Un mail de moins">−</button>
@@ -146,8 +148,10 @@ export function TaskRow({ t, today, act, showClient = true, showDate = true }) {
         ${!t.done ? html`<button class="btn small primary" onClick=${() => act.setMails(t, t.target)}><${Icon} name="check" size=${16} stroke=${2.6} /> Fait</button>` : null}
         ${t.link ? html`<a class="btn small ghost" href=${t.link} target="_blank" rel="noopener"><${Icon} name="link" size=${15} /> Ma prospection</a>` : null}
       </div>` : null}
+      ${t.recurringId === 'routine-post' && act.S ? html`<${PostBox} S=${act.S} act=${act} t=${t} />` : null}
+      ${t.openTab && act.openTab ? html`<div class="row" style="margin-top:10px" onClick=${(e) => e.stopPropagation()}><button class="btn small" onClick=${() => act.openTab(t.openTab)}><${Icon} name="cards" size=${15} /> Ouvrir mes réponses</button></div>` : null}
       ${t.link && !t.prosp ? html`<div class="row" style="margin-top:10px" onClick=${(e) => e.stopPropagation()}><a class="btn small" href=${t.link} target="_blank" rel="noopener"><${Icon} name="link" size=${15} /> Ouvrir</a></div>` : null}
-      ${!t.done && !t.question && !t.prosp && act.snooze ? html`<div class="row" style="margin-top:12px" onClick=${(e) => e.stopPropagation()}>
+      ${!t.done && !t.question && !t.prosp && t.recurringId !== 'routine-post' && act.snooze ? html`<div class="row" style="margin-top:12px" onClick=${(e) => e.stopPropagation()}>
         <button class="btn small primary" disabled=${!canToggle} onClick=${() => act.toggle(t)}><${Icon} name="check" size=${16} stroke=${2.6} /> Fait</button>
         ${t.daily || t.kind === 'event' || t.date > today ? null : html`<button class="btn small" onClick=${() => act.snooze(t)}>Demain</button>`}
       </div>` : null}

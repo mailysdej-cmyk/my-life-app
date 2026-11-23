@@ -57,14 +57,14 @@ function migrateV3(items, writes) {
 const WEEK = [1, 2, 3, 4, 5];
 export const ROUTINE = [
   { id: 'routine-relances', title: 'Faire les relances de prospection', note: 'Les crèches contactées il y a 7 jours sans réponse.', freq: { type: 'weekdays', weekdays: WEEK }, gate: 'entreprise', link: 'prospection', order: 2 },
-  { id: 'routine-linkedin-ajouts', title: 'Ajouter 2 à 4 directrices ou gestionnaires de crèches sur LinkedIn', freq: { type: 'weekdays', weekdays: WEEK }, gate: 'site', order: 3 },
+  { id: 'routine-linkedin-ajouts', title: 'Ajouter 2 à 4 directrices ou gestionnaires d’établissements petite enfance sur LinkedIn', freq: { type: 'weekdays', weekdays: WEEK }, gate: 'site', order: 3 },
   { id: 'routine-instagram-suivre', title: 'Suivre 2 ou 3 comptes de crèches ou de pros de la petite enfance sur Instagram (optionnel)', freq: { type: 'weekdays', weekdays: WEEK }, gate: 'site', order: 4 },
   { id: 'routine-facebook', title: 'Passer 10 à 15 min dans les groupes Facebook petite enfance', note: 'Répondre aux questions, rendre service, ne pas vendre.', freq: { type: 'weekdays', weekdays: [1, 4] }, gate: 'site', order: 5 },
   { id: 'routine-post', title: 'Publier le post de la semaine sur LinkedIn', note: 'Et le même sur Instagram si je veux.', freq: { type: 'weekdays', weekdays: [2] }, gate: 'site', order: 5 },
   { id: 'routine-commentaires', title: 'Écrire 2 ou 3 commentaires utiles sous des posts LinkedIn', freq: { type: 'weekdays', weekdays: [3] }, gate: 'site', order: 5 },
   { id: 'routine-point', title: 'Faire le point de la semaine', note: 'Mettre à jour « Ma prospection » dans ma Bibliothèque Serelys, puis demander à Claude la liste de crèches suivante.', freq: { type: 'weekdays', weekdays: [5] }, gate: 'entreprise', link: 'prospection', order: 9 },
-  { id: 'une-fois-linkedin', title: 'Créer mon profil LinkedIn', freq: { type: 'todo' }, gate: 'site', order: 1 },
-  { id: 'une-fois-google', title: 'Créer ma fiche Google Business Profile', freq: { type: 'todo' }, gate: 'site', order: 2 },
+  { id: 'une-fois-linkedin', title: 'Créer mon profil LinkedIn', note: 'Photo, titre « J’aide les établissements petite enfance à gagner du temps sur l’administratif », section Infos avec mon histoire courte et le lien du site.', freq: { type: 'todo' }, gate: 'site', order: 1 },
+  { id: 'une-fois-google', title: 'Créer ma fiche Google Business Profile', note: 'Service à distance, sans adresse visible.', freq: { type: 'todo' }, gate: 'site', order: 2 },
   { id: 'une-fois-facebook', title: 'Rejoindre 3 à 5 groupes Facebook petite enfance', freq: { type: 'todo' }, gate: 'site', order: 3 },
   { id: 'une-fois-instagram', title: 'Créer le compte Instagram Serelys', note: 'Nom « Serelys », logo, lien du site.', freq: { type: 'todo' }, gate: 'site', order: 4 },
 ];

@@ -5,12 +5,17 @@ import { describeFreq, prospectionSettings, WEEKDAYS, GATES } from '../engine.js
 import { Sheet, PrivacyHint } from '../ui.js';
 import { enablePush, disablePush, isIOS, isStandalone, pushSupported, thisDeviceId } from '../push.js';
 import { day } from '../dates.js';
+import { Avancement, Lancement } from './launch.js';
+import { Reperes, Posts } from './reperes.js';
 
 export function SettingsScreen({ S, settings, all, today, act, onBack, initial = null }) {
   const [sec, setSec] = useState(initial);
   const save = act.saveSettings;
   const S_ = { S, settings, all, today, act, save };
   const sections = [
+    ['avancement', 'leaf', 'Mon avancement', `Site ${all.ctx.siteOnline ? 'en ligne' : 'pas encore en ligne'} · entreprise ${all.ctx.entrepriseCreated ? 'créée' : 'pas encore créée'}`],
+    ['lancement', 'check', 'Mon lancement', `${all.launch.filter((x) => x.done).length}/${all.launch.length} étapes faites`],
+    ['reperes', 'star', 'Mes repères', 'Mes chiffres, mes règles d’écriture, mes posts'],
     ['recurring', 'calendar', 'Mes tâches récurrentes', 'Ajouter, modifier, choisir la fréquence'],
     ['prospection', 'prospect', 'Prospection', `${prospectionSettings(settings).goal} mails par semaine · ${prospectionSettings(settings).mode === 'bloc' ? 'en un bloc' : '5 par jour'}`],
     ['notif', 'bell', 'Notifications', 'Activer, tester, heures'],
@@ -20,11 +25,12 @@ export function SettingsScreen({ S, settings, all, today, act, onBack, initial =
     ['backup', 'download', 'Sauvegarde', 'Automatique en ligne · copie de secours'],
     ['security', 'lock', 'Sécurité et compte', 'Double authentification, déconnexion'],
   ];
-  const Cur = { recurring: Recurring, prospection: Prospection, notif: Notifications, activity: Activity, money: MoneySettings, rules: Rules, backup: Backup, security: Security }[sec];
+  const hidden = { posts: ['posts', 'edit', 'Ma banque de posts', ''] };
+  const Cur = { avancement: Avancement, lancement: Lancement, reperes: Reperes, posts: Posts, recurring: Recurring, prospection: Prospection, notif: Notifications, activity: Activity, money: MoneySettings, rules: Rules, backup: Backup, security: Security }[sec];
   return html`<div class="screen">
     <div class="topbar"><button class="icon-btn" onClick=${() => (sec ? setSec(null) : onBack())} aria-label="Retour"><${Icon} name="back" /></button>
-      <h1 class="grow">${sec ? sections.find((s) => s[0] === sec)[2] : 'Réglages'}</h1></div>
-    ${Cur ? html`<${Cur} ...${S_} />` : html`<${WhereIAm} all=${all} act=${act} />${sections.map(([id, icon, title, sub]) => html`<button class="card client-card" style="padding:16px" onClick=${() => setSec(id)}>
+      <h1 class="grow">${sec ? (sections.find((s) => s[0] === sec) || hidden[sec])[2] : 'Réglages'}</h1></div>
+    ${Cur ? html`<${Cur} ...${S_} />` : html`${sections.map(([id, icon, title, sub]) => html`<button class="card client-card" style="padding:16px" onClick=${() => setSec(id)}>
       <div class="row"><span class="icon-btn" style="box-shadow:none;background:var(--card-2)"><${Icon} name=${icon} /></span>
         <div class="grow"><div style="font-weight:800;font-size:17px">${title}</div><div class="small muted">${sub}</div></div></div></button>`)}
       <${Field} label="Lien de la Bibliothèque Serelys"><${TextLine} type="url" value=${settings.libraryUrl} onChange=${(v) => save({ libraryUrl: v })} placeholder="https://…" /></${Field}>
@@ -233,21 +239,6 @@ function Security({ act }) {
 
 const FREQ_TYPES = [['daily', 'Tous les jours'], ['weekdays', 'Certains jours'], ['monthly', 'Chaque mois'], ['interval', 'Tous les X'], ['once', 'Une fois, à une date'], ['todo', 'Une fois, sans date (à cocher)']];
 
-// Où j'en suis : deux réglages simples qui débloquent la routine « visibilité et prospection »
-export function WhereIAm({ all, act }) {
-  const { ctx } = all;
-  const setEntreprise = async (v) => {
-    await act.saveSettings({ aeCreated: v });
-    if (all.launch.some((x) => x.id === 'entreprise')) await act.saveStep('entreprise', { done: v, doneAt: v ? new Date().toISOString() : null });
-  };
-  return html`<div class="card">
-    <h2><${Icon} name="leaf" size=${20} /> Où j’en suis</h2>
-    <${Switch} label="Site en ligne" value=${ctx.siteOnline} onChange=${(v) => act.saveSettings({ siteOnline: v })}>
-      <div class="small muted" style="font-weight:600">Débloque LinkedIn, Instagram, Facebook et Google Business.</div></${Switch}>
-    <${Switch} label="Entreprise créée" value=${ctx.entrepriseCreated} onChange=${setEntreprise}>
-      <div class="small muted" style="font-weight:600">Débloque les mails de prospection et les relances.</div></${Switch}>
-  </div>`;
-}
 const PLANS = [['essentiel', 'Essentiel'], ['confort', 'Confort'], ['premium', 'Premium']];
 
 function Recurring({ S, act, today }) {

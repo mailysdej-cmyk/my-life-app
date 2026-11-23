@@ -9,7 +9,7 @@ const TODAY = '2026-10-19';
 
 function baseState() {
   return {
-    settings: { trackingStart: '2026-10-19', aeCreated: true, aeCreationDate: '2026-09-01', prospection: { enabled: false } },
+    settings: { trackingStart: '2026-10-19', aeCreated: true, aeCreationDate: '2026-09-01', prospection: { enabled: false }, launchSeeded: true },
     clients: [
       { id: 'A', name: 'Crèche Test Essentiel', plan: 'essentiel', style: 'classique', createdAt: TODAY,
         discoveryDate: '2026-10-20T10:00', quoteAccepted: '2026-10-22', signatureVisioDate: '2026-10-24T14:00', contractSignedDate: '2026-10-25',
@@ -196,7 +196,9 @@ test('Mes tâches : Urssaf, Zapier, ACRE, facture électronique', () => {
   const q = computeAll(s, TODAY, { monthsAhead: 4 });
   assert.equal(find(q, 'e:urssaf:2026-T4').due, '2027-01-31');
   const acre = q.tasks.filter((t) => t.stateKey === 'e:acre');
-  assert.deepEqual(acre.map((t) => t.date), ['2026-10-17', '2026-11-09', '2026-11-29']);
+  assert.deepEqual(acre.map((t) => t.date), ['2026-10-17', '2026-11-09', '2026-11-29', '2026-12-07'], 'J+7, J+30, J+50, J+58');
+  assert.match(acre[0].title, /autoentrepreneur\.urssaf\.fr/);
+  assert.match(acre[0].note[0], /Il reste \d+ jours.*Passé 60 jours, l’ACRE est perdue/);
   assert.equal(acre.filter((t) => !t.hidden).length, 1);
 });
 

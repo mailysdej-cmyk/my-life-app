@@ -482,9 +482,12 @@ function myTasks(ctx, invoices, fromYm, toYm) {
   if (settings.rcProDate) add({ key: 'e:rcpro', date: day(settings.rcProDate), title: 'Souscrire mon assurance RC pro', note: ['Avant la première signature.'] });
   if (settings.aeTaskDate) add({ key: 'e:creation-ae', date: day(settings.aeTaskDate), title: 'Créer mon auto-entreprise', note: ['Pas de devis ni de facture sans SIRET.'], autoDone: !!settings.aeCreated });
   if (aeStart && !settings.acreDone) {
-    for (const j of [7, 30, 50]) {
-      add({ key: `e:acre:${j}`, stateKey: 'e:acre', date: addDays(aeStart, j), due: addDays(aeStart, 60), reminder: j > 7, legal: true,
-        title: 'Demander l’ACRE à l’Urssaf', note: [`Au plus tard le ${fmtDate(addDays(aeStart, 60))}.`] });
+    const limit = addDays(aeStart, 60);
+    const left = diffDays(ctx.today, limit);
+    for (const j of [7, 30, 50, 58]) {
+      add({ key: `e:acre:${j}`, stateKey: 'e:acre', date: addDays(aeStart, j), due: limit, reminder: j > 7, legal: true, link: 'https://www.autoentrepreneur.urssaf.fr',
+        title: 'Demander l’ACRE sur autoentrepreneur.urssaf.fr',
+        note: [left >= 0 ? `Il reste ${left} jour${left > 1 ? 's' : ''} (jusqu’au ${fmtDate(limit)}). Passé 60 jours, l’ACRE est perdue.` : `Le délai de 60 jours est passé depuis le ${fmtDate(limit)}.`] });
     }
   }
   if (settings.eInvoiceDate) add({ key: 'e:facture-electronique', date: day(settings.eInvoiceDate), title: 'Préparer la facture électronique', note: ['Obligatoire pour émettre des factures à partir du 1er septembre 2027.'], legal: true });
@@ -648,6 +651,8 @@ function prospectionTasks(ctx, weeks = 4) {
   for (let w = 0; w < weeks; w++) {
     const mon = addDays(mondayOf(ctx.today), 7 * w);
     let cumPlanned = 0; let sentBefore = 0;
+    let sentWeek = 0;
+    for (let i = 0; i < 7; i++) sentWeek += Number(ctx.taskState[`pm:${addDays(mon, i)}`]?.sent) || 0;
     for (let i = 0; i < 5; i++) {
       const d = addDays(mon, i);
       cumPlanned += planned[i];
@@ -658,10 +663,31 @@ function prospectionTasks(ctx, weeks = 4) {
       if (target <= 0 && sent <= 0) continue;
       out.push(makeTask({ key: `pm:${d}`, kind: 'prosp', prosp: true, mine: true, noCarry: true, routine: true, order: 1, date: d, target: Math.max(target, sent), sent,
         title: `Envoyer ${target} nouveau${target > 1 ? 'x' : ''} mail${target > 1 ? 's' : ''} de prospection`, link: prospectionUrl(ctx),
-        note: [ps.mode === 'bloc' ? `Objectif : ${ps.goal} mails cette semaine, en un bloc.` : `Objectif : ${ps.goal} mails cette semaine, ${Math.round(ps.goal / 5)} par jour.`] }));
+        weekSent: sentWeek, note: [`Cette semaine : ${sentWeek} / ${ps.goal} mails.`] }));
     }
   }
   return out;
+}
+
+// Mon lancement : seulement la prochaine étape sur la fiche du jour (et celle cochée aujourd'hui, barrée)
+function launchTasks(ctx) {
+  const steps = ctx.launch;
+  const cur = currentLaunchStep(steps);
+  const out = [];
+  steps.forEach((x, i) => {
+    const doneToday = x.done && x.doneAt && day(x.doneAt) === ctx.today;
+    if (x !== cur && !doneToday) return;
+    out.push(makeTask({ key: `l:${x.id}`, launchId: x.id, launch: true, mine: true, custom: true, noCarry: true, date: ctx.today, title: x.label,
+      launchPos: i + 1, launchTotal: steps.length }));
+  });
+  return out;
+}
+
+// La veille d'une visio de découverte ou de signature : relire mes réponses par cœur
+function visioEveTasks(tasks) {
+  return tasks.filter((t) => t.kind === 'event' && (/:ob:(visio|signature)$/.test(t.key) || /^p:.*:visio$/.test(t.key))).map((e) => makeTask({
+    key: `rv:${e.key}`, mine: true, custom: true, date: addDays(e.date, -1), openTab: 'cards',
+    title: 'Relire mes réponses par cœur', note: [`Visio demain${e.time ? ` à ${e.time.replace(':', ' h ')}` : ''} : ${e.title.replace(/^Faire la /, '')}.`] }));
 }
 
 // Toutes les tâches, avec leur état. Options : horizon en mois après aujourd'hui.
@@ -676,7 +702,8 @@ export function computeAll(state, today, { monthsAhead = 3 } = {}) {
     tasks.push(...onboardingTasks(c, ctx), ...monthlyTasks(c, ctx, fromYm, toYm), ...dateLinkedTasks(c, ctx));
   }
   tasks.push(...invoiceTasks(invoices, ctx), ...myTasks(ctx, invoices, fromYm, toYm), ...prospectTasks(ctx),
-    ...recurringTasks(ctx, fromYm, toYm), ...prospectionTasks(ctx));
+    ...recurringTasks(ctx, fromYm, toYm), ...prospectionTasks(ctx), ...launchTasks(ctx));
+  tasks.push(...visioEveTasks(tasks));
   for (const m of ctx.manualTasks) {
     if (!isDate(m.date)) continue;
     tasks.push(makeTask({ key: `m:${m.id}`, manualId: m.id, clientId: m.clientId || null, date: day(m.date), time: timeOf(m.date), title: m.title, manual: true, notes: m.notes }));
@@ -693,6 +720,7 @@ export function computeAll(state, today, { monthsAhead = 3 } = {}) {
     t.doneAt = st.doneAt || null;
     // « Demain » : la tâche est reportée, sans passer en retard
     if (t.prosp) t.done = t.target > 0 && t.sent >= t.target;
+    if (t.launchId) { const x = ctx.launch.find((y) => y.id === t.launchId); t.done = !!x?.done; t.doneAt = x?.doneAt || null; }
     if (!t.done && isDate(st.snoozedUntil) && day(st.snoozedUntil) > t.plan) {
       t.snoozedUntil = day(st.snoozedUntil);
       t.plannedDate = t.plan;
@@ -705,7 +733,7 @@ export function computeAll(state, today, { monthsAhead = 3 } = {}) {
     // Pas cochée le jour prévu → sur la fiche du lendemain, « en retard »
     t.late = !t.done && !t.noCarry && t.plan < today;
     if (t.noCarry && !t.done && t.plan < today) t.hidden = true;
-    if (t.hideDone && t.done) t.hidden = true;
+    if (t.hideDone && t.done && (!t.doneAt || day(t.doneAt) < today)) t.hidden = true;
     if (t.daily && !t.done && t.date < today) t.hidden = true;
     t.today = !t.done && t.plan === today;
     t.ongoing = false;
@@ -855,8 +883,8 @@ export function buildNotification(state, today, kind, { weekly = false, weekChec
   const todays = fiche.items.filter((t) => !t.done && notifiable(t, ctx));
   const lines = [];
   if (kind === 'summary') {
-    const step = ctx.mode === 'lancement' ? currentLaunchStep(ctx.launch) : null;
-    if (step) lines.push(`Étape en cours : ${step.label}`);
+    const soft = isoWeekday(today) >= 6;
+    if (soft) late.length = 0; // jour souple : rien d'obligatoire, pas de rappel du retard
     const n = todays.length + late.length;
     if (n) lines.push(`Ma fiche du jour : ${plural(n, 'tâche')}${late.length ? `, dont ${late.length} en retard` : ''}`, ...bullets([...late, ...todays]));
     if (weekly) {
@@ -872,6 +900,7 @@ export function buildNotification(state, today, kind, { weekly = false, weekChec
     return { title: `Serelys · ${fmtDate(today)}`, body: lines.join('\n'), tag: `summary-${today}`, count: n };
   }
   if (kind === 'reminder') {
+    if (isoWeekday(today) >= 6) return null; // jour souple
     const rest = [...late, ...todays];
     if (rest.length) lines.push(`Il reste ${plural(rest.length, 'chose')} à cocher :`, ...bullets(rest, 4));
     if (weekCheck) {

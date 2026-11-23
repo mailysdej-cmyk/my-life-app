@@ -47,10 +47,12 @@ test('Mode lancement : aucune cliente réelle, la cliente test ne compte pas', (
 test('Mode lancement : notifications seulement de l’étape en cours (+ clientes test)', () => {
   const s = base();
   let n = buildNotification(s, TODAY, 'summary', { weekly: true });
-  assert.equal(n.body, 'Étape en cours : Faire les tests avec Mélodie', 'ni semaine, ni tâches d’entrepreneuse');
-  assert.equal(buildNotification(s, TODAY, 'reminder'), null, 'pas de rappel à 10 h / 12 h pour l’étape');
+  assert.equal(n.body, 'Ma fiche du jour : 1 tâche\n• Faire les tests avec Mélodie', 'la prochaine étape du lancement, ni semaine, ni tâches d’entrepreneuse');
+  assert.equal(buildNotification(s, TODAY, 'reminder').body, 'Il reste 1 chose à cocher :\n• Faire les tests avec Mélodie');
   n = buildNotification(base({ clients: [testClient] }), '2026-11-05', 'summary');
-  assert.match(n.body, /Étape en cours : Faire les tests avec Mélodie\nMa fiche du jour : \d+ tâches?(, dont \d+ en retard)?\n(• .*\n)*• Vérifier si j’ai reçu les infos du mois de la crèche Les Essais/);
+  assert.match(n.body, /^Ma fiche du jour : \d+ tâches?(, dont \d+ en retard)?\n/);
+  assert.match(n.body, /• Faire les tests avec Mélodie/);
+  assert.match(n.body, /• Vérifier si j’ai reçu les infos du mois de la crèche Les Essais/);
 });
 
 test('Mode lancement : échéances légales et paiements, après « Créer l’entreprise » seulement', () => {

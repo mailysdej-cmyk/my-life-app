@@ -9,7 +9,7 @@ function FlipCard({ c, onEdit, flipped, onFlip }) {
       <div class="face">
         <div class="spread" style="align-items:flex-start"><div class="q grow">${c.star ? html`<span class="star">★ </span>` : null}${c.q}</div>
           ${onEdit ? html`<button class="icon-btn" style="width:38px;height:38px" onClick=${(e) => { e.stopPropagation(); onEdit(); }} aria-label="Modifier"><${Icon} name="edit" size=${17} /></button>` : null}</div>
-        <div class="small muted" style="margin-top:14px;display:flex;gap:6px;align-items:center"><${Icon} name="flip" size=${14} /> Touche pour retourner</div>
+        <button class="btn small" style="margin-top:14px;align-self:flex-start"><${Icon} name="flip" size=${15} /> Voir la réponse</button>
       </div>
       <div class="face back">
         <div class="lab">Ma réponse</div><div class="a">${c.a}</div>
