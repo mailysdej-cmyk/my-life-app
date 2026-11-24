@@ -29,6 +29,8 @@ alter table public.mylife_devices enable row level security;
 alter table public.mylife_reminders enable row level security;
 alter table public.mylife_system enable row level security;
 revoke all on public.mylife_devices, public.mylife_reminders, public.mylife_system from anon, authenticated;
+-- Le programme (rôle service_role) doit, lui, pouvoir lire et écrire
+grant select, insert, update, delete on public.mylife_devices, public.mylife_reminders, public.mylife_system to service_role;
 
 insert into public.mylife_system (k, v)
 values ('cron_secret', to_jsonb(replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')))
@@ -54,3 +56,6 @@ $job$);
 select cron.schedule('mylife-cleanup', '41 3 * * *', $job$
   delete from cron.job_run_details where end_time < now() - interval '2 days';
 $job$);
+
+-- 4. Demander à Supabase de voir tout de suite les nouvelles tables
+notify pgrst, 'reload schema';
