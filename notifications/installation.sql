@@ -1,6 +1,7 @@
 -- ============================================================================
--- My Life : installation des rappels (à coller une seule fois dans
--- Supabase › SQL Editor › New query › Run). Sans danger si on le relance.
+-- My Life : installation des rappels. FACULTATIF : le programme « mylife-push » fait
+-- lui-même cette installation à son premier appel. Ce fichier sert de secours
+-- (Supabase › SQL Editor › New query › Run). Sans danger si on le relance.
 -- Tables et programme propres à My Life (préfixe mylife_) : rien de Serelys n'est touché.
 -- ============================================================================
 
